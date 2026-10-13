@@ -1,0 +1,7 @@
+node_modules/
+backups/
+e2e/shots/
+test/shots/
+*.log
+docs/
+e2e/showcase-avatars/
