@@ -52,8 +52,8 @@ test('updateFolder renames, recolors and resets image', () => {
   assert.throws(() => o.updateFolder(base(), 'zz', { name: 'x' }), /찾을 수 없습니다/);
 });
 
-test('deleteFolder spills its bots in place', () => {
-  assert.deepEqual(plain(o.deleteFolder(base(), 'f1')), ['a', 'b', { id: 'f2', name: 'B', data: ['c'], color: 'default', imgFile: '' }, 'd', 'e']);
+test('deleteFolder moves its bots outside, right after the last folder', () => {
+  assert.deepEqual(plain(o.deleteFolder(base(), 'f1')), [{ id: 'f2', name: 'B', data: ['c'], color: 'default', imgFile: '' }, 'a', 'b', 'd', 'e']);
 });
 
 test('moveFolder swaps folder slots only', () => {

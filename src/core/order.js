@@ -145,7 +145,9 @@ function updateFolder(order, folderId, patch) {
 function deleteFolder(order, folderId) {
   const out = cloneOrder(order);
   const { folder, index } = requireFolder(out, folderId);
-  out.splice(index, 1, ...folder.data);
+  out.splice(index, 1);
+  // 봇은 폴더 밖 맨 앞(마지막 폴더 바로 뒤)에 꺼낸다. 폴더 사이에 끼면 사이드바에서 흩어져 보인다.
+  out.splice(rootInsertIndex(out), 0, ...folder.data);
   return out;
 }
 

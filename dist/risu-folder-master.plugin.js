@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.0
+//@display-name 📁 Risu 폴더 마스터 v1.0.1
 //@api 3.0
-//@version 1.0.0
+//@version 1.0.1
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.0 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.0.1 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.0";
+const FM_VERSION = "1.0.1";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -227,7 +227,9 @@ function updateFolder(order, folderId, patch) {
 function deleteFolder(order, folderId) {
   const out = cloneOrder(order);
   const { folder, index } = requireFolder(out, folderId);
-  out.splice(index, 1, ...folder.data);
+  out.splice(index, 1);
+  // 봇은 폴더 밖 맨 앞(마지막 폴더 바로 뒤)에 꺼낸다. 폴더 사이에 끼면 사이드바에서 흩어져 보인다.
+  out.splice(rootInsertIndex(out), 0, ...folder.data);
   return out;
 }
 
@@ -1286,6 +1288,9 @@ button:disabled{cursor:default;opacity:.4}
 .has-selection .fm-selbar{transform:translate(-50%,0);opacity:1;visibility:visible}
 .fm-app.is-reorder .fm-selbar{transform:translate(-50%,140%);opacity:0;visibility:hidden}
 .fm-selbar .fm-btn{height:34px}
+.fm-selbar .fm-pend{display:none}
+.is-pending .fm-selbar .fm-pend{display:inline-flex}
+.is-pending .fm-selbar .fm-norm{display:none}
 
 /* 끌어 옮기기 */
 .fm-app.is-reorder .fm-card{cursor:grab}
@@ -2054,7 +2059,7 @@ function headHtml(model) {
   const selectAll = `<button class="fm-btn" data-act="select-all">${icon('select')}<span class="fm-text">${scope}</span></button>`;
   if (ui.view === VIEW_ALL) {
     return `<span class="fm-thumb plain">${icon('layers')}</span><div class="fm-head-text"><h2>모든 폴더</h2><p>폴더 ${model.folders.length}개 · 봇 ${all}개</p></div>
-      <div class="fm-head-actions"></div>`;
+      <div class="fm-head-actions">${ui.reorder ? '' : `<button class="fm-btn" data-act="create-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>`}</div>`;
   }
   if (ui.view === ROOT) {
     return `${backButton(`<span class="fm-thumb plain">${icon('inbox')}</span>`)}<div class="fm-head-text"><h2>폴더 밖 봇</h2><p>${model.root.length}개 · 사이드바에서 폴더 아래에 놓입니다</p></div>
@@ -2070,7 +2075,7 @@ function headHtml(model) {
     <button class="fm-btn fm-icon fm-desk" data-act="image" title="폴더 그림" aria-label="폴더 그림 바꾸기">${icon('image')}</button>
     <button class="fm-btn fm-icon fm-desk" data-act="folder-up" title="위로" aria-label="폴더를 위로">${icon('up')}</button>
     <button class="fm-btn fm-icon fm-desk" data-act="folder-down" title="아래로" aria-label="폴더를 아래로">${icon('down')}</button>
-    <button class="fm-btn danger fm-desk" data-act="unfold" title="폴더를 풀고 봇은 폴더 밖으로">${icon('unfold')}<span class="fm-text">폴더 풀기</span></button>
+    <button class="fm-btn danger fm-desk" data-act="unfold" title="폴더를 지우고 봇은 폴더 밖으로">${icon('unfold')}<span class="fm-text">폴더 삭제</span></button>
     <button class="fm-btn fm-mob" data-act="folder-more">${icon('more')}<span>더보기</span></button>`;
   return `${backButton(folderThumb(f))}<div class="fm-head-text"><h2>${esc(f.name || '이름 없음')}</h2><p>봇 ${f.data.length - gone}개${gone ? ` · 지워진 자리 ${gone}` : ''}</p></div>
     <div class="fm-head-actions">${tools}</div>`;
@@ -2087,7 +2092,7 @@ function renderMain(keepScroll) {
   if (ui.view === VIEW_ALL && !ui.query) {
     const tiles = model.folders.map(folderTileHtml).join('');
     html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${model.folders.length}</span></div>
-      <div class="fm-folders">${tiles || '<div class="fm-empty" style="grid-column:1/-1">폴더가 없습니다. 봇을 고른 뒤 새 폴더를 만드세요</div>'}</div></section>`;
+      <div class="fm-folders">${tiles || '<div class="fm-empty" style="grid-column:1/-1">폴더가 없습니다. 위의 "새 폴더"로 만드세요</div>'}</div></section>`;
     html += `<section class="fm-section"><div class="fm-section-head" data-drop="${ROOT}"><i class="fm-dot"></i><h3>폴더 밖 봇</h3><span>${model.root.length}</span></div>
       ${gridHtml(model.root, ROOT, '모든 봇이 폴더에 들어 있습니다')}</section>`;
   } else if (ui.view === VIEW_ALL) {
@@ -2130,7 +2135,8 @@ function renderMain(keepScroll) {
 
 function renderChrome() {
   const app = ui.app;
-  app.classList.toggle('has-selection', ui.selected.size > 0);
+  app.classList.toggle('has-selection', ui.selected.size > 0 || !!ui.pending);
+  app.classList.toggle('is-pending', !!ui.pending);
   const pending = roster.pending();
   const chip = app.querySelector('.fm-loading');
   const stuck = roster.mode === 'unknown';
@@ -2143,7 +2149,10 @@ function renderChrome() {
   app.querySelectorAll('[data-display]').forEach((b) => b.classList.toggle('on', b.dataset.display === ui.display));
   const here = viewIds();
   const others = here ? [...ui.selected].filter((id) => !here.has(id)).length : 0;
-  app.querySelector('.fm-count').textContent = `${ui.selected.size}개 선택${others ? ` · 다른 곳 ${others}개` : ''}`;
+  app.querySelector('.fm-count').textContent = ui.pending
+    ? `"${ui.pending}"에 넣을 봇 ${ui.selected.size}개${others ? ` · 다른 곳 ${others}개` : ''}`
+    : `${ui.selected.size}개 선택${others ? ` · 다른 곳 ${others}개` : ''}`;
+  app.querySelector('[data-act="pending-make"]').disabled = !ui.selected.size;
   const inFolder = [...ui.selected].some((id) => currentModel().folders.some((f) => f.data.includes(id)));
   app.querySelector('[data-act="to-root"]').hidden = !inFolder;
   app.querySelector('[data-grid-label]').textContent = gridLabel(ui.grid);
@@ -2355,6 +2364,32 @@ async function newFolderFromSelection() {
   if (ok) clearSelection();
 }
 
+// 새 폴더: RisuAI는 빈 폴더를 지우므로 이름을 정한 뒤 넣을 봇을 고르게 한다. 이미 고른 봇이 있으면 바로 만든다.
+async function createFolderFlow() {
+  if (ui.reorder) return;
+  if (ui.selected.size) { await newFolderFromSelection(); return; }
+  const name = await askText('새 폴더', { placeholder: '폴더 이름', confirm: '다음', desc: 'RisuAI는 빈 폴더를 지우므로, 이어서 넣을 봇을 고릅니다. 다른 폴더의 봇도 고를 수 있습니다.' });
+  if (!name) return;
+  ui.pending = name;
+  renderChrome();
+  toast('넣을 봇을 고른 뒤 아래 "폴더 만들기"를 누르세요', { ms: 4000 });
+}
+
+async function makePendingFolder() {
+  const name = ui.pending;
+  const ids = [...ui.selected];
+  if (!name || !ids.length) return;
+  let made = null;
+  const ok = await save(`새 폴더 "${name}"`, (o) => { const r = createFolder(o, name, ids); made = r.folder.id; return r.order; },
+    { after: () => { ui.view = made; } });
+  if (ok) { ui.pending = null; clearSelection(); }
+}
+
+function cancelPendingFolder() {
+  ui.pending = null;
+  clearSelection();
+}
+
 async function moveSelectedToRoot() {
   const ids = [...ui.selected];
   if (await save(`${ids.length}개 → 폴더 밖`, (o) => moveBotsToRoot(o, ids))) clearSelection();
@@ -2406,9 +2441,9 @@ async function shiftFolder(delta, fid = ui.view) {
 async function unfoldFolder(fid = ui.view) {
   const f = folderById(fid);
   if (!f) return;
-  const ok = await askConfirm(`"${f.name}" 폴더 풀기`, `폴더만 없애고 안의 봇 ${f.data.length}개는 폴더 밖으로 꺼냅니다. 봇은 지워지지 않습니다.`, { confirm: '폴더 풀기', danger: true });
+  const ok = await askConfirm(`"${f.name}" 폴더 삭제`, `폴더만 지우고 안의 봇 ${f.data.length}개는 폴더 밖으로 꺼냅니다. 봇은 지워지지 않습니다.`, { confirm: '폴더 삭제', danger: true });
   if (!ok) return;
-  await save(`"${f.name}" 폴더를 풀었습니다`, (o) => deleteFolder(o, f.id), { after: () => { if (ui.view === f.id) ui.view = ROOT; } });
+  await save(`"${f.name}" 폴더를 지웠습니다`, (o) => deleteFolder(o, f.id), { after: () => { if (ui.view === f.id) ui.view = ROOT; } });
 }
 
 // 정리 점검. 같은 봇이 여러 자리에 있는지는 순서 데이터만으로 바로 본다.
@@ -2560,6 +2595,7 @@ async function openSidebarDialog() {
 
 function startReorder() {
   const { folders, root } = currentModel();
+  ui.pending = null;
   ui.reorder = {
     layout: { folders: folders.map((f) => ({ id: f.id, data: [...f.data] })), root: [...root] },
     signature: JSON.stringify(ui.order),
@@ -2690,10 +2726,12 @@ function shellHtml() {
       <main class="fm-main"><div class="fm-head"></div><div class="fm-scroll"></div>
         <div class="fm-selbar" role="toolbar" aria-label="고른 봇">
           <button class="fm-count" data-act="show-selection" title="고른 봇 보기"></button>
-          <button class="fm-btn primary" data-act="move">${icon('folder')}폴더로 옮기기</button>
-          <button class="fm-btn" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
-          <button class="fm-btn" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
-          <button class="fm-btn ghost fm-icon" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
+          <button class="fm-btn primary fm-pend" data-act="pending-make">${icon('check')}폴더 만들기</button>
+          <button class="fm-btn fm-pend" data-act="pending-cancel">취소</button>
+          <button class="fm-btn primary fm-norm" data-act="move">${icon('folder')}폴더로 옮기기</button>
+          <button class="fm-btn fm-norm" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
+          <button class="fm-btn fm-norm" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
+          <button class="fm-btn ghost fm-icon fm-norm" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
         </div>
       </main>
     </div>
@@ -2799,7 +2837,7 @@ function locateBot(id) {
 }
 
 // 휴대폰용: 폴더 꾸미기 도구를 글자 버튼으로 모은 창.
-const FOLDER_ITEMS = [['image', 'image', '그림 바꾸기'], ['rename', 'edit', '이름 바꾸기'], ['color', 'palette', '색 바꾸기'], ['locate', 'locate', '사이드바에서 찾기'], ['folder-up', 'up', '위로 옮기기'], ['folder-down', 'down', '아래로 옮기기'], ['unfold', 'unfold', '폴더 풀기']];
+const FOLDER_ITEMS = [['image', 'image', '그림 바꾸기'], ['rename', 'edit', '이름 바꾸기'], ['color', 'palette', '색 바꾸기'], ['locate', 'locate', '사이드바에서 찾기'], ['folder-up', 'up', '위로 옮기기'], ['folder-down', 'down', '아래로 옮기기'], ['unfold', 'unfold', '폴더 삭제']];
 
 function runFolderAction(act, fid) {
   const run = {
@@ -2922,6 +2960,9 @@ const ACTIONS = {
   'new-folder': () => newFolderFromSelection(),
   'to-root': () => moveSelectedToRoot(),
   clear: () => clearSelection(),
+  'create-folder': () => createFolderFlow(),
+  'pending-make': () => makePendingFolder(),
+  'pending-cancel': () => cancelPendingFolder(),
   rename: () => renameFolder(),
   color: () => recolorFolder(),
   image: () => changeFolderImage(),
@@ -3007,6 +3048,7 @@ function bindEvents(root) {
       if (e.key !== 'Escape' || !ui.app || document.querySelector('.fm-modal-back') || drag.active) return;
       const menu = ui.app.querySelector('.fm-menu');
       if (menu.classList.contains('open')) menu.classList.remove('open');
+      else if (ui.pending) cancelPendingFolder();
       else if (ui.selected.size) clearSelection();
       else if (ui.view !== VIEW_ALL && !ui.reorder && e.target.tagName !== 'INPUT') openView(VIEW_ALL);
     });
@@ -3025,6 +3067,7 @@ async function openManager() {
     roster.onUpdate = onRosterUpdate;
     ui.grid = await loadGrid();
     ui.selected.clear();
+    ui.pending = null;
     ui.reorder = null;
     ui.query = '';
     document.body.innerHTML = `<style>${APP_CSS}</style>${shellHtml()}`;

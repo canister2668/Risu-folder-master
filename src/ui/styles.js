@@ -208,6 +208,9 @@ button:disabled{cursor:default;opacity:.4}
 .has-selection .fm-selbar{transform:translate(-50%,0);opacity:1;visibility:visible}
 .fm-app.is-reorder .fm-selbar{transform:translate(-50%,140%);opacity:0;visibility:hidden}
 .fm-selbar .fm-btn{height:34px}
+.fm-selbar .fm-pend{display:none}
+.is-pending .fm-selbar .fm-pend{display:inline-flex}
+.is-pending .fm-selbar .fm-norm{display:none}
 
 /* 끌어 옮기기 */
 .fm-app.is-reorder .fm-card{cursor:grab}
