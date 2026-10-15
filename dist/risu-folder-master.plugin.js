@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.1
+//@display-name 📁 Risu 폴더 마스터 v1.0.2
 //@api 3.0
-//@version 1.0.1
+//@version 1.0.2
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.1 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.0.2 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.1";
+const FM_VERSION = "1.0.2";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -793,6 +793,7 @@ async function rosterVerify(ids, timeoutMs = 60000) {
 
 const GRID_KEY = 'risuFolderMaster.sidebarGrid';
 const GRID_STYLE_XID = 'risu-folder-master-sidebar-grid';
+const SIDEBAR_CELL_REM = 4.5;
 // 정리할 때 다시 권한을 묻지 않도록 한 번 얻은 메인 문서를 기억한다.
 let rootDoc = null;
 const GRID_MODES = ['off', 'all', 'folder'];
@@ -805,20 +806,75 @@ function normalizeGrid(value) {
   return {
     mode: GRID_MODES.includes(v.mode) ? v.mode : 'off',
     cols: clamp(parseInt(v.cols, 10) || 2, 2, 5),
+    align: v.align === true,
+    motion: v.motion === true,
+    borderless: v.borderless === true,
   };
 }
 
 function gridLabel(grid) {
   if (grid.mode === 'all') return `항상 ${grid.cols}열`;
   if (grid.mode === 'folder') return `폴더 열면 ${grid.cols}열`;
-  return '기본 1열';
+  return '기본 1열' + (grid.align || grid.motion || grid.borderless ? ' · 꾸미기' : '');
+}
+
+function sidebarEnabled(grid) {
+  return grid.mode !== 'off' || grid.align || grid.motion || grid.borderless;
+}
+
+// 배열과 꾸미기는 독립적이다. 공식판에는 rs-sidebar-scroll 이름표가 없다.
+function buildSidebarDecorationCSS(grid) {
+  const cell = SIDEBAR_CELL_REM;
+  const scroll = ':is(.rs-sidebar-scroll,.flex.grow.w-full.flex-col.overflow-y-auto)';
+  const root = `.rs-sidebar:has(${scroll})`;
+  const box = `${root} ${scroll} .p-1.flex-col.py-1.mt-1.rounded-lg.relative`;
+  const item = '.group.relative.flex.items-center.px-2';
+  const menuTarget = ':is(.rs-sidebar-menu-popover,:is(.border-b-selected,.border-t-selected) .absolute.w-20.min-w-20.flex.flex-col.items-center)';
+  const menu = `${root} ${menuTarget}`;
+  const toggle = `${root} button.flex.h-8.min-h-8.w-14.min-w-14`;
+  const css = [];
+  if (grid.align) {
+    css.push(
+      `${root}{align-items:flex-start!important}`,
+      `${root} ${scroll}{align-items:flex-start!important}`,
+      `${root} ${scroll} ${item}{width:${cell}rem!important;min-width:${cell}rem!important;box-sizing:border-box!important;justify-content:center!important;flex-shrink:0!important;margin:.25rem 0!important}`,
+      `${box}{row-gap:.5rem!important;padding-top:.5rem!important;padding-bottom:.5rem!important;margin-top:.35rem!important;margin-bottom:.35rem!important}`,
+      `${root} ${scroll} .flex.flex-col.items-center.gap-2.px-2{width:${cell}rem!important;min-width:${cell}rem!important;box-sizing:border-box!important;align-items:center!important;padding-top:.25rem!important;padding-bottom:.25rem!important}`,
+      `${toggle}{align-self:flex-start!important;margin-left:.75rem!important;margin-right:auto!important;flex-shrink:0!important}`,
+    );
+    // 단열 중심은 5rem 레일에 맞추고, 다열은 기존 셀 폭 계산을 따른다.
+    if (grid.mode !== 'all') css.push(
+      `${root} ${scroll} ${item}{margin-left:.25rem!important}`,
+      `${box} ${item}{margin-left:0!important}`,
+      `${root} ${scroll} .flex.flex-col.items-center.gap-2.px-2{margin-left:.25rem!important}`,
+    );
+  }
+  if (grid.borderless) css.push(
+    `${root} ${scroll} ${item} .avatar.border{border-color:transparent!important;box-shadow:none!important}`,
+    `${box} .absolute.top-0.left-1.border.w-full.h-full.rounded-lg.z-0{border-color:transparent!important}`,
+  );
+  if (grid.motion) css.push(
+    `@media (prefers-reduced-motion:no-preference){`,
+    `${root}{transition:width .25s cubic-bezier(.25,1,.5,1),min-width .25s cubic-bezier(.25,1,.5,1)!important}`,
+    `${box}{animation:fm-sidebar-folder-open .2s ease-out!important}`,
+    `${menu}{transform-origin:top center;animation:fm-sidebar-menu-open .2s ease-out!important}`,
+    `${menu}.bottom-full{transform-origin:bottom center;animation-name:fm-sidebar-menu-open-bottom!important}`,
+    `${toggle} svg{transition:transform .2s ease!important}`,
+    `${root}:has(${menuTarget}) button.flex.h-8.min-h-8.w-14.min-w-14 svg{transform:rotate(90deg)!important}`,
+    `@keyframes fm-sidebar-folder-open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`,
+    `@keyframes fm-sidebar-menu-open{from{opacity:0;transform:translateY(-8px) scaleY(.96)}to{opacity:1;transform:translateY(0) scaleY(1)}}`,
+    `@keyframes fm-sidebar-menu-open-bottom{from{opacity:0;transform:translateY(8px) scaleY(.96)}to{opacity:1;transform:translateY(0) scaleY(1)}}`,
+    `}`,
+  );
+  return css.join('\n');
 }
 
 // 사이드바 칸 하나 = 아바타 56px + 좌우 여백 = 4.5rem.
 // 칸 사이의 드롭 자리(.h-4.min-h-4.w-14)는 폭 0으로 겹쳐 두어 열을 밀지 않으면서 끌어 놓기 자리로 남긴다.
 function buildGridCSS(grid) {
-  if (grid.mode === 'off') return '';
-  const cell = 4.5;
+  const decoration = buildSidebarDecorationCSS(grid);
+  if (grid.mode === 'off') return decoration;
+  const cell = SIDEBAR_CELL_REM;
   const width = (grid.cols * cell + 1.25).toFixed(2) + 'rem';
   // 해적판은 .rs-sidebar-scroll, 공식판은 같은 칸에 이름표가 없어 클래스 조합으로 함께 잡는다.
   const scroll = ':is(.rs-sidebar-scroll,.flex.grow.w-full.flex-col.overflow-y-auto)';
@@ -829,7 +885,7 @@ function buildGridCSS(grid) {
   const gapRule = '{width:.5rem!important;min-width:.5rem!important;height:3.5rem!important;min-height:3.5rem!important;margin:0 -.25rem!important;position:relative!important;z-index:1!important}';
   const itemRule = `{width:${cell}rem!important;min-width:${cell}rem!important;justify-content:center!important}`;
   const sidebarRule = `{width:${width}!important;min-width:${width}!important;max-width:none!important;flex-shrink:0!important}`;
-  const lines = [`/* folder-master sidebar grid: ${grid.mode} ${grid.cols} */`];
+  const lines = [decoration, `/* folder-master sidebar grid: ${grid.mode} ${grid.cols} */`];
   if (grid.mode === 'all') {
     lines.push(
       `.rs-sidebar.rs-sidebar${sidebarRule}`,
@@ -900,7 +956,7 @@ async function applyGrid(grid) {
   if (!doc) return false;
   rootDoc = doc;
   await setRootStyle(doc, GRID_STYLE_XID, buildGridCSS(grid));
-  if (grid.mode === 'off') return 'ok';
+  if (!sidebarEnabled(grid)) return 'ok';
   if (!(await doc.querySelector('.rs-sidebar'))) return 'nosidebar';
   return (await doc.querySelector(SIDEBAR_SCROLL)) ? 'ok' : 'nostructure';
 }
@@ -941,7 +997,7 @@ async function migrateLegacyGrid() {
 // 시작할 때는 플러그인 저장소만 읽는다(db 권한 창을 띄우지 않음). 꺼져 있으면 메인 문서 권한도 묻지 않는다.
 async function startSidebarGrid() {
   const grid = await loadGrid();
-  if (grid.mode !== 'off') {
+  if (sidebarEnabled(grid)) {
     try { await applyGrid(grid); } catch (err) { console.log('[risu-folder-master] 사이드바 그리드 적용 실패: ' + errorText(err)); }
   }
   return grid;
@@ -2156,7 +2212,7 @@ function renderChrome() {
   const inFolder = [...ui.selected].some((id) => currentModel().folders.some((f) => f.data.includes(id)));
   app.querySelector('[data-act="to-root"]').hidden = !inFolder;
   app.querySelector('[data-grid-label]').textContent = gridLabel(ui.grid);
-  app.querySelector('[data-act="sidebar"]').classList.toggle('on', ui.grid.mode !== 'off');
+  app.querySelector('[data-act="sidebar"]').classList.toggle('on', sidebarEnabled(ui.grid));
   const last = saver.history[saver.history.length - 1];
   const undo = app.querySelector('[data-act="undo"]');
   undo.disabled = !last || !!ui.reorder;
@@ -2546,24 +2602,36 @@ async function reload() {
 async function openSidebarDialog() {
   let mode = ui.grid.mode;
   let cols = ui.grid.cols;
+  const decor = { align: ui.grid.align, motion: ui.grid.motion, borderless: ui.grid.borderless };
   const result = await openModal(
     `<h3>사이드바 배열</h3>
-     <p class="fm-desc">RisuAI 왼쪽 캐릭터 사이드바를 여러 열로 펼칩니다.\n설정은 서버에 저장되어 새로고침하거나 테마를 바꿔도 유지됩니다.</p>
-     <span class="fm-label">언제 펼칠까요</span>
+     <p class="fm-desc">왼쪽 캐릭터 사이드바의 배열과 꾸미기를 설정합니다.\n설정은 서버에 저장되어 새로고침하거나 테마를 바꿔도 유지됩니다.</p>
+     <span class="fm-label">배열 방식</span>
      <div class="fm-options">
-       <button class="fm-option" data-mode="off">끄기<small>기본 1열</small></button>
-       <button class="fm-option" data-mode="all">항상<small>목록 전체</small></button>
-       <button class="fm-option" data-mode="folder">폴더 열 때<small>연 폴더만</small></button>
+       <button class="fm-option" data-mode="off">기본 1열<small>여러 열 끄기</small></button>
+       <button class="fm-option" data-mode="all">항상 여러 열<small>목록 전체</small></button>
+       <button class="fm-option" data-mode="folder">폴더 열 때만<small>열린 폴더 내부만 여러 열</small></button>
      </div>
      <span class="fm-label">열 수</span>
      <div class="fm-options cols4">${[2, 3, 4, 5].map((n) => `<button class="fm-option" data-cols="${n}">${n}열</button>`).join('')}</div>
      <div class="fm-preview"><div class="fm-mini" data-mini></div><p data-say></p></div>
+     <span class="fm-label">꾸미기 · 배열과 별도로 적용</span>
+     <div class="fm-options fm-sidebar-decor">
+       <button class="fm-option" data-decor="align" aria-pressed="false">정렬·간격 보정<small>버튼과 목록 정렬</small></button>
+       <button class="fm-option" data-decor="motion" aria-pressed="false">열림 효과·폭 전환<small>동작 줄이기 설정 존중</small></button>
+       <button class="fm-option" data-decor="borderless" aria-pressed="false">폴더 테두리 숨김<small>폴더 아이콘과 열린 박스</small></button>
+     </div>
+     <p class="fm-note">꾸미기는 기본 1열에서도 사용할 수 있습니다. 폴더·메뉴 효과는 열릴 때 적용됩니다.</p>
      <p class="fm-note">처음 적용할 때 RisuAI가 이 플러그인의 '메인 화면 접근' 권한을 묻습니다. 허용해야 사이드바에 반영됩니다.</p>
      <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>적용</button></div>`,
     (modal, close) => {
       const sync = () => {
         modal.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
         modal.querySelectorAll('[data-cols]').forEach((b) => { b.classList.toggle('on', +b.dataset.cols === cols); b.disabled = mode === 'off'; });
+        modal.querySelectorAll('[data-decor]').forEach((b) => {
+          b.classList.toggle('on', decor[b.dataset.decor]);
+          b.setAttribute('aria-pressed', String(decor[b.dataset.decor]));
+        });
         const n = mode === 'off' ? 1 : cols;
         const mini = modal.querySelector('[data-mini]');
         mini.style.gridTemplateColumns = `repeat(${n},12px)`;
@@ -2574,8 +2642,9 @@ async function openSidebarDialog() {
       };
       modal.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => { mode = b.dataset.mode; sync(); }; });
       modal.querySelectorAll('[data-cols]').forEach((b) => { b.onclick = () => { cols = +b.dataset.cols; sync(); }; });
+      modal.querySelectorAll('[data-decor]').forEach((b) => { b.onclick = () => { decor[b.dataset.decor] = !decor[b.dataset.decor]; sync(); }; });
       modal.querySelector('[data-x]').onclick = () => close(null);
-      modal.querySelector('[data-ok]').onclick = () => close({ mode, cols });
+      modal.querySelector('[data-ok]').onclick = () => close({ mode, cols, ...decor });
       sync();
     },
   );
@@ -3083,7 +3152,7 @@ async function openManager() {
       if (!grid) return;
       ui.grid = await loadGrid();
       renderChrome();
-      if (ui.grid.mode !== 'off') await applyGrid(ui.grid);
+      if (sidebarEnabled(ui.grid)) await applyGrid(ui.grid);
       toast('예전 사이드바 배열 설정을 새 방식으로 옮겼습니다');
     }).catch((err) => console.log('[risu-folder-master] 옛 그리드 정리 실패: ' + errorText(err)));
   } catch (err) {

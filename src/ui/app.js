@@ -235,7 +235,7 @@ function renderChrome() {
   const inFolder = [...ui.selected].some((id) => currentModel().folders.some((f) => f.data.includes(id)));
   app.querySelector('[data-act="to-root"]').hidden = !inFolder;
   app.querySelector('[data-grid-label]').textContent = gridLabel(ui.grid);
-  app.querySelector('[data-act="sidebar"]').classList.toggle('on', ui.grid.mode !== 'off');
+  app.querySelector('[data-act="sidebar"]').classList.toggle('on', sidebarEnabled(ui.grid));
   const last = saver.history[saver.history.length - 1];
   const undo = app.querySelector('[data-act="undo"]');
   undo.disabled = !last || !!ui.reorder;
@@ -625,24 +625,36 @@ async function reload() {
 async function openSidebarDialog() {
   let mode = ui.grid.mode;
   let cols = ui.grid.cols;
+  const decor = { align: ui.grid.align, motion: ui.grid.motion, borderless: ui.grid.borderless };
   const result = await openModal(
     `<h3>사이드바 배열</h3>
-     <p class="fm-desc">RisuAI 왼쪽 캐릭터 사이드바를 여러 열로 펼칩니다.\n설정은 서버에 저장되어 새로고침하거나 테마를 바꿔도 유지됩니다.</p>
-     <span class="fm-label">언제 펼칠까요</span>
+     <p class="fm-desc">왼쪽 캐릭터 사이드바의 배열과 꾸미기를 설정합니다.\n설정은 서버에 저장되어 새로고침하거나 테마를 바꿔도 유지됩니다.</p>
+     <span class="fm-label">배열 방식</span>
      <div class="fm-options">
-       <button class="fm-option" data-mode="off">끄기<small>기본 1열</small></button>
-       <button class="fm-option" data-mode="all">항상<small>목록 전체</small></button>
-       <button class="fm-option" data-mode="folder">폴더 열 때<small>연 폴더만</small></button>
+       <button class="fm-option" data-mode="off">기본 1열<small>여러 열 끄기</small></button>
+       <button class="fm-option" data-mode="all">항상 여러 열<small>목록 전체</small></button>
+       <button class="fm-option" data-mode="folder">폴더 열 때만<small>열린 폴더 내부만 여러 열</small></button>
      </div>
      <span class="fm-label">열 수</span>
      <div class="fm-options cols4">${[2, 3, 4, 5].map((n) => `<button class="fm-option" data-cols="${n}">${n}열</button>`).join('')}</div>
      <div class="fm-preview"><div class="fm-mini" data-mini></div><p data-say></p></div>
+     <span class="fm-label">꾸미기 · 배열과 별도로 적용</span>
+     <div class="fm-options fm-sidebar-decor">
+       <button class="fm-option" data-decor="align" aria-pressed="false">정렬·간격 보정<small>버튼과 목록 정렬</small></button>
+       <button class="fm-option" data-decor="motion" aria-pressed="false">열림 효과·폭 전환<small>동작 줄이기 설정 존중</small></button>
+       <button class="fm-option" data-decor="borderless" aria-pressed="false">폴더 테두리 숨김<small>폴더 아이콘과 열린 박스</small></button>
+     </div>
+     <p class="fm-note">꾸미기는 기본 1열에서도 사용할 수 있습니다. 폴더·메뉴 효과는 열릴 때 적용됩니다.</p>
      <p class="fm-note">처음 적용할 때 RisuAI가 이 플러그인의 '메인 화면 접근' 권한을 묻습니다. 허용해야 사이드바에 반영됩니다.</p>
      <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>적용</button></div>`,
     (modal, close) => {
       const sync = () => {
         modal.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
         modal.querySelectorAll('[data-cols]').forEach((b) => { b.classList.toggle('on', +b.dataset.cols === cols); b.disabled = mode === 'off'; });
+        modal.querySelectorAll('[data-decor]').forEach((b) => {
+          b.classList.toggle('on', decor[b.dataset.decor]);
+          b.setAttribute('aria-pressed', String(decor[b.dataset.decor]));
+        });
         const n = mode === 'off' ? 1 : cols;
         const mini = modal.querySelector('[data-mini]');
         mini.style.gridTemplateColumns = `repeat(${n},12px)`;
@@ -653,8 +665,9 @@ async function openSidebarDialog() {
       };
       modal.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => { mode = b.dataset.mode; sync(); }; });
       modal.querySelectorAll('[data-cols]').forEach((b) => { b.onclick = () => { cols = +b.dataset.cols; sync(); }; });
+      modal.querySelectorAll('[data-decor]').forEach((b) => { b.onclick = () => { decor[b.dataset.decor] = !decor[b.dataset.decor]; sync(); }; });
       modal.querySelector('[data-x]').onclick = () => close(null);
-      modal.querySelector('[data-ok]').onclick = () => close({ mode, cols });
+      modal.querySelector('[data-ok]').onclick = () => close({ mode, cols, ...decor });
       sync();
     },
   );
@@ -1162,7 +1175,7 @@ async function openManager() {
       if (!grid) return;
       ui.grid = await loadGrid();
       renderChrome();
-      if (ui.grid.mode !== 'off') await applyGrid(ui.grid);
+      if (sidebarEnabled(ui.grid)) await applyGrid(ui.grid);
       toast('예전 사이드바 배열 설정을 새 방식으로 옮겼습니다');
     }).catch((err) => console.log('[risu-folder-master] 옛 그리드 정리 실패: ' + errorText(err)));
   } catch (err) {

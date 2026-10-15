@@ -104,7 +104,18 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   // 사이드바
   await p.click('[data-act="sidebar"]'); await p.click('[data-mode="folder"]'); await p.click('[data-cols="4"]'); await shot(p, 'desktop-sidebar');
   await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(300);
-  ok(await p.evaluate(() => JSON.stringify(window.__store.get('risuFolderMaster.sidebarGrid')) === '{"mode":"folder","cols":4}' && window.__rootStyles.length === 1 && /folder 4/.test(window.__rootStyles[0].html)), 'sidebar grid saved to plugin storage + style updated');
+  ok(await p.evaluate(() => JSON.stringify(window.__store.get('risuFolderMaster.sidebarGrid')) === '{"mode":"folder","cols":4,"align":false,"motion":false,"borderless":false}' && window.__rootStyles.length === 1 && /folder 4/.test(window.__rootStyles[0].html)), 'sidebar grid saved to plugin storage + style updated');
+  await p.click('[data-act="sidebar"]'); await p.click('[data-mode="off"]');
+  for (const key of ['align', 'motion', 'borderless']) await p.click(`[data-decor="${key}"]`);
+  await p.click('.fm-modal [data-ok]');
+  ok(await p.evaluate(() => {
+    const saved = window.__store.get('risuFolderMaster.sidebarGrid');
+    return saved.mode === 'off' && saved.align && saved.motion && saved.borderless && window.__rootStyles.length === 1 && /fm-sidebar-folder-open/.test(window.__rootStyles[0].html);
+  }), 'single-column decorations saved independently');
+  await p.click('[data-act="sidebar"]');
+  ok(await p.locator('[data-decor][aria-pressed="true"]').count() === 3 && await p.locator('[data-cols]:disabled').count() === 4, 'decoration toggles restored with column count disabled');
+  await p.click('[data-decor="motion"]'); await p.click('.fm-modal [data-x]');
+  ok(await p.evaluate(() => window.__store.get('risuFolderMaster.sidebarGrid').motion === true), 'cancel preserves saved decorations');
   for (const d of ['list', 'tiles']) { await p.click(`[data-display="${d}"]`); await p.waitForTimeout(300); await shot(p, 'desktop-' + d); }
   ok(errs.length === 0, 'no page errors (desktop)', errs);
   await p.close();

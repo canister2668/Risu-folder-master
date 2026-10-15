@@ -5,6 +5,7 @@
 
 const GRID_KEY = 'risuFolderMaster.sidebarGrid';
 const GRID_STYLE_XID = 'risu-folder-master-sidebar-grid';
+const SIDEBAR_CELL_REM = 4.5;
 // 정리할 때 다시 권한을 묻지 않도록 한 번 얻은 메인 문서를 기억한다.
 let rootDoc = null;
 const GRID_MODES = ['off', 'all', 'folder'];
@@ -17,20 +18,75 @@ function normalizeGrid(value) {
   return {
     mode: GRID_MODES.includes(v.mode) ? v.mode : 'off',
     cols: clamp(parseInt(v.cols, 10) || 2, 2, 5),
+    align: v.align === true,
+    motion: v.motion === true,
+    borderless: v.borderless === true,
   };
 }
 
 function gridLabel(grid) {
   if (grid.mode === 'all') return `항상 ${grid.cols}열`;
   if (grid.mode === 'folder') return `폴더 열면 ${grid.cols}열`;
-  return '기본 1열';
+  return '기본 1열' + (grid.align || grid.motion || grid.borderless ? ' · 꾸미기' : '');
+}
+
+function sidebarEnabled(grid) {
+  return grid.mode !== 'off' || grid.align || grid.motion || grid.borderless;
+}
+
+// 배열과 꾸미기는 독립적이다. 공식판에는 rs-sidebar-scroll 이름표가 없다.
+function buildSidebarDecorationCSS(grid) {
+  const cell = SIDEBAR_CELL_REM;
+  const scroll = ':is(.rs-sidebar-scroll,.flex.grow.w-full.flex-col.overflow-y-auto)';
+  const root = `.rs-sidebar:has(${scroll})`;
+  const box = `${root} ${scroll} .p-1.flex-col.py-1.mt-1.rounded-lg.relative`;
+  const item = '.group.relative.flex.items-center.px-2';
+  const menuTarget = ':is(.rs-sidebar-menu-popover,:is(.border-b-selected,.border-t-selected) .absolute.w-20.min-w-20.flex.flex-col.items-center)';
+  const menu = `${root} ${menuTarget}`;
+  const toggle = `${root} button.flex.h-8.min-h-8.w-14.min-w-14`;
+  const css = [];
+  if (grid.align) {
+    css.push(
+      `${root}{align-items:flex-start!important}`,
+      `${root} ${scroll}{align-items:flex-start!important}`,
+      `${root} ${scroll} ${item}{width:${cell}rem!important;min-width:${cell}rem!important;box-sizing:border-box!important;justify-content:center!important;flex-shrink:0!important;margin:.25rem 0!important}`,
+      `${box}{row-gap:.5rem!important;padding-top:.5rem!important;padding-bottom:.5rem!important;margin-top:.35rem!important;margin-bottom:.35rem!important}`,
+      `${root} ${scroll} .flex.flex-col.items-center.gap-2.px-2{width:${cell}rem!important;min-width:${cell}rem!important;box-sizing:border-box!important;align-items:center!important;padding-top:.25rem!important;padding-bottom:.25rem!important}`,
+      `${toggle}{align-self:flex-start!important;margin-left:.75rem!important;margin-right:auto!important;flex-shrink:0!important}`,
+    );
+    // 단열 중심은 5rem 레일에 맞추고, 다열은 기존 셀 폭 계산을 따른다.
+    if (grid.mode !== 'all') css.push(
+      `${root} ${scroll} ${item}{margin-left:.25rem!important}`,
+      `${box} ${item}{margin-left:0!important}`,
+      `${root} ${scroll} .flex.flex-col.items-center.gap-2.px-2{margin-left:.25rem!important}`,
+    );
+  }
+  if (grid.borderless) css.push(
+    `${root} ${scroll} ${item} .avatar.border{border-color:transparent!important;box-shadow:none!important}`,
+    `${box} .absolute.top-0.left-1.border.w-full.h-full.rounded-lg.z-0{border-color:transparent!important}`,
+  );
+  if (grid.motion) css.push(
+    `@media (prefers-reduced-motion:no-preference){`,
+    `${root}{transition:width .25s cubic-bezier(.25,1,.5,1),min-width .25s cubic-bezier(.25,1,.5,1)!important}`,
+    `${box}{animation:fm-sidebar-folder-open .2s ease-out!important}`,
+    `${menu}{transform-origin:top center;animation:fm-sidebar-menu-open .2s ease-out!important}`,
+    `${menu}.bottom-full{transform-origin:bottom center;animation-name:fm-sidebar-menu-open-bottom!important}`,
+    `${toggle} svg{transition:transform .2s ease!important}`,
+    `${root}:has(${menuTarget}) button.flex.h-8.min-h-8.w-14.min-w-14 svg{transform:rotate(90deg)!important}`,
+    `@keyframes fm-sidebar-folder-open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`,
+    `@keyframes fm-sidebar-menu-open{from{opacity:0;transform:translateY(-8px) scaleY(.96)}to{opacity:1;transform:translateY(0) scaleY(1)}}`,
+    `@keyframes fm-sidebar-menu-open-bottom{from{opacity:0;transform:translateY(8px) scaleY(.96)}to{opacity:1;transform:translateY(0) scaleY(1)}}`,
+    `}`,
+  );
+  return css.join('\n');
 }
 
 // 사이드바 칸 하나 = 아바타 56px + 좌우 여백 = 4.5rem.
 // 칸 사이의 드롭 자리(.h-4.min-h-4.w-14)는 폭 0으로 겹쳐 두어 열을 밀지 않으면서 끌어 놓기 자리로 남긴다.
 function buildGridCSS(grid) {
-  if (grid.mode === 'off') return '';
-  const cell = 4.5;
+  const decoration = buildSidebarDecorationCSS(grid);
+  if (grid.mode === 'off') return decoration;
+  const cell = SIDEBAR_CELL_REM;
   const width = (grid.cols * cell + 1.25).toFixed(2) + 'rem';
   // 해적판은 .rs-sidebar-scroll, 공식판은 같은 칸에 이름표가 없어 클래스 조합으로 함께 잡는다.
   const scroll = ':is(.rs-sidebar-scroll,.flex.grow.w-full.flex-col.overflow-y-auto)';
@@ -41,7 +97,7 @@ function buildGridCSS(grid) {
   const gapRule = '{width:.5rem!important;min-width:.5rem!important;height:3.5rem!important;min-height:3.5rem!important;margin:0 -.25rem!important;position:relative!important;z-index:1!important}';
   const itemRule = `{width:${cell}rem!important;min-width:${cell}rem!important;justify-content:center!important}`;
   const sidebarRule = `{width:${width}!important;min-width:${width}!important;max-width:none!important;flex-shrink:0!important}`;
-  const lines = [`/* folder-master sidebar grid: ${grid.mode} ${grid.cols} */`];
+  const lines = [decoration, `/* folder-master sidebar grid: ${grid.mode} ${grid.cols} */`];
   if (grid.mode === 'all') {
     lines.push(
       `.rs-sidebar.rs-sidebar${sidebarRule}`,
@@ -112,7 +168,7 @@ async function applyGrid(grid) {
   if (!doc) return false;
   rootDoc = doc;
   await setRootStyle(doc, GRID_STYLE_XID, buildGridCSS(grid));
-  if (grid.mode === 'off') return 'ok';
+  if (!sidebarEnabled(grid)) return 'ok';
   if (!(await doc.querySelector('.rs-sidebar'))) return 'nosidebar';
   return (await doc.querySelector(SIDEBAR_SCROLL)) ? 'ok' : 'nostructure';
 }
@@ -153,7 +209,7 @@ async function migrateLegacyGrid() {
 // 시작할 때는 플러그인 저장소만 읽는다(db 권한 창을 띄우지 않음). 꺼져 있으면 메인 문서 권한도 묻지 않는다.
 async function startSidebarGrid() {
   const grid = await loadGrid();
-  if (grid.mode !== 'off') {
+  if (sidebarEnabled(grid)) {
     try { await applyGrid(grid); } catch (err) { console.log('[risu-folder-master] 사이드바 그리드 적용 실패: ' + errorText(err)); }
   }
   return grid;

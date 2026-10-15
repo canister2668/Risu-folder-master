@@ -42,8 +42,8 @@ test('grid CSS never contains < > & (v3 setInnerHTML runs DOMPurify)', () => {
 
 test('normalizeGrid clamps bad values', () => {
   const g = load(files);
-  assert.deepEqual({ ...g.normalizeGrid({ mode: 'weird', cols: 9 }) }, { mode: 'off', cols: 5 });
-  assert.deepEqual({ ...g.normalizeGrid(null) }, { mode: 'off', cols: 2 });
+  assert.deepEqual({ ...g.normalizeGrid({ mode: 'weird', cols: 9 }) }, { mode: 'off', cols: 5, align: false, motion: false, borderless: false });
+  assert.deepEqual({ ...g.normalizeGrid(null) }, { mode: 'off', cols: 2, align: false, motion: false, borderless: false });
 });
 
 test('applyGrid adds one style, updates it, and removes it when off', async () => {
@@ -77,8 +77,8 @@ test('migrateLegacyGrid moves the v3.07 customCSS block into plugin storage and 
   const h = fakeHost({ css: legacy });
   const g = load(files, { Risuai: h.Risuai });
   const grid = await g.migrateLegacyGrid();
-  assert.deepEqual({ ...grid }, { mode: 'folder', cols: 4 });
-  assert.deepEqual(JSON.parse(JSON.stringify(h.storage.get('risuFolderMaster.sidebarGrid'))), { mode: 'folder', cols: 4 });
+  assert.deepEqual({ ...grid }, { mode: 'folder', cols: 4, align: false, motion: false, borderless: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.storage.get('risuFolderMaster.sidebarGrid'))), { mode: 'folder', cols: 4, align: false, motion: false, borderless: false });
   assert.equal(h.db.customCSS, 'a{}\n\nb{}');
   assert.equal(await g.migrateLegacyGrid(), null);
 });
@@ -90,4 +90,31 @@ test('migrateLegacyGrid keeps an existing new-style setting and reads disabled b
   assert.equal(grid.mode, 'off');
   assert.deepEqual(h.storage.get('risuFolderMaster.sidebarGrid'), { mode: 'all', cols: 5 });
   assert.equal(h.db.customCSS, '');
+});
+
+test('single-column decorations survive restart and are removed only when all options are off', async () => {
+  const h = fakeHost({ stored: { mode: 'off', cols: 4, align: true, motion: true, borderless: true }, css: 'body{}' });
+  const g = load(files, { Risuai: h.Risuai });
+  const grid = await g.startSidebarGrid();
+  assert.equal(grid.mode, 'off');
+  assert.equal(h.head.kids.length, 1);
+  assert.match(h.head.kids[0].html, /fm-sidebar-folder-open/);
+  assert.equal(h.db.customCSS, 'body{}');
+  await g.applyGrid(g.normalizeGrid({ mode: 'off', motion: true }));
+  assert.equal(h.head.kids.length, 1);
+  assert.doesNotMatch(h.head.kids[0].html, /border-color:transparent/);
+  await g.applyGrid(g.normalizeGrid(null));
+  assert.equal(h.head.kids.length, 0);
+});
+
+test('every decoration combination is safe for the existing style injection path', () => {
+  const g = load(files);
+  for (const mode of ['off', 'all', 'folder']) for (const cols of [2, 3, 4, 5]) for (let bits = 0; bits < 8; bits++) {
+    const css = g.buildGridCSS(g.normalizeGrid({ mode, cols, align: !!(bits & 1), motion: !!(bits & 2), borderless: !!(bits & 4) }));
+    assert.doesNotMatch(css, /[<>&]/);
+    assert.doesNotMatch(css, /outline\s*:/);
+    assert.equal(css.includes('prefers-reduced-motion:no-preference'), !!(bits & 2));
+    assert.equal(css.includes('border-color:transparent'), !!(bits & 4));
+    assert.doesNotMatch(css, /character-list|hamburger-menu/);
+  }
 });
