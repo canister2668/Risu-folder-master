@@ -262,7 +262,7 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   await p.tap('.fm-nav[data-folder="f-th"]'); await p.waitForTimeout(300); await shot(p, 'mobile-folder');
   ok(await p.isVisible('[data-act="folder-more"]') && await p.isHidden('[data-act="rename"]'), 'mobile folder tools collapse into 더보기');
   await p.tap('[data-act="folder-more"]'); await p.waitForTimeout(200); await shot(p, 'mobile-more');
-  ok(await p.evaluate(() => document.querySelectorAll('.fm-sheet .fm-btn').length === 7 && [...document.querySelectorAll('.fm-sheet .fm-btn')].some(b => b.textContent.includes('빠른 접근'))), 'more sheet lists labelled tools');
+  ok(await p.evaluate(() => document.querySelectorAll('.fm-sheet .fm-btn').length === 7 && [...document.querySelectorAll('.fm-sheet .fm-btn')].some(b => b.textContent.includes('즐겨찾기에 고정'))), 'more sheet lists labelled tools');
   await p.tap('.fm-modal [data-x]'); await p.waitForTimeout(200);
   // 길게 눌러 끌기(터치)
   await p.tap('[data-act="reorder"]'); await p.waitForTimeout(200);

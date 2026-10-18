@@ -80,6 +80,7 @@ function cardHtml(id, container) {
     if (c.group) meta.push(`<span title="그룹 채팅">${icon('users')}</span>`);
     if (c.modules) meta.push(`<span class="fm-extra" title="모듈 ${c.modules}개">${icon('puzzle')}${c.modules}</span>`);
     if (c.assets) meta.push(`<span class="fm-extra" title="에셋 ${c.assets}개">${icon('image')}${c.assets}</span>`);
+    if (container === VIEW_STARS) meta.unshift(`<span class="fm-fav-where" title="원래 위치">${icon('folder')}${esc(favFolderName(id))}</span>`);
   } else if (roster.missing.has(id)) meta.push('<span>캐릭터가 지워졌습니다</span>');
   else if (roster.failed.has(id)) meta.push(`<button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
   if (c && roster.failed.has(id)) meta.unshift(`<span class="fm-warn">갱신 실패</span><button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
@@ -90,7 +91,7 @@ function cardHtml(id, container) {
   const state = ghost ? ' ghost-bot' : failed ? ' failed' : !c ? ' loading' : '';
   return `<div class="fm-card${selected ? ' sel' : ''}${state}" data-id="${esc(id)}" data-container="${esc(container)}" title="${esc(c ? c.name : id)}" tabindex="0" role="checkbox" aria-checked="${selected}" aria-label="${esc(name)}">
     ${avatarHtml(c, id)}<div class="fm-txt"><div class="fm-name">${esc(name)}</div><div class="fm-meta">${meta.join('')}</div></div>
-    <div class="fm-tick">${icon('check')}</div>${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}</div>`;
+    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}${favStarButton(id)}</div></div>`;
 }
 
 function gridHtml(ids, container, emptyText, filter = true) {
@@ -107,7 +108,7 @@ function folderTileHtml(f) {
   const count = f.data.length - gone;
   const tip = `${f.name || '이름 없음'} · 봇 ${count}개${gone ? ` · 지워진 자리 ${gone}` : ''}`;
   return `<button class="fm-ftile${f.data.length ? '' : ' empty'}" style="--c:${FOLDER_HEX[f.color] || FOLDER_HEX.default}" data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}" title="${esc(tip)}" aria-label="${esc(tip)}">
-    ${icon('grip', 'fm-grip')}${folderThumb(f)}<span class="fm-fcount">${count}</span><span class="fm-ftile-text"><b>${esc(f.name || '이름 없음')}</b></span></button>`;
+    ${icon('grip', 'fm-grip')}${folderThumb(f)}<span class="fm-fcount">${count}</span><span class="fm-ftile-text"><b>${esc(f.name || '이름 없음')}</b></span>${favIsPin(f.id) ? `<span class="fm-fav-pin" title="고정한 폴더">${icon('star')}</span>` : ''}</button>`;
 }
 
 // ── 그리기 ──
@@ -120,6 +121,7 @@ function renderRail() {
     `<button class="fm-nav fm-mob" data-act="folder-list"><span class="fm-thumb plain">${icon('search')}</span><span class="fm-nav-name">폴더 목록</span></button>`,
     nav(`data-view="${VIEW_ALL}"`, `<span class="fm-thumb plain">${icon('layers')}</span>`, '모든 폴더', folders.length, ui.view === VIEW_ALL ? ' on' : ''),
     nav(`data-view="${ROOT}" data-drop="${ROOT}"`, `<span class="fm-thumb plain">${icon('inbox')}</span>`, '폴더 밖', root.length, ui.view === ROOT ? ' on' : ''),
+    favRailHtml({ folders, root }, nav),
     `<div class="fm-rail-label"><span>폴더 ${folders.length}</span></div>`,
     ...folders.map((f) =>
       nav(`data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}"`, folderThumb(f), f.name || '이름 없음', f.data.length,
@@ -134,7 +136,7 @@ function backButton(thumb) {
 }
 
 function headHtml(model) {
-  if(ui.view===VIEW_STARS)return `<span class="fm-thumb plain">${icon('star')}</span><div class="fm-head-text"><h2>즐겨찾는 봇</h2><p>${plusStarIds().length}개 · 원래 폴더 위치를 유지합니다</p></div><div class="fm-head-actions"><button class="fm-btn" data-act="select-all">${icon('select')}전체 선택</button></div>`;
+  if (ui.view === VIEW_STARS) return favHeadHtml();
 
   const all = model.folders.reduce((n, f) => n + f.data.length, 0) + model.root.length;
   const scope = ui.query ? '검색 결과 전체' : ui.view === ROOT ? '폴더 밖 전체' : '이 폴더 전체';
@@ -172,6 +174,7 @@ function renderMain(keepScroll) {
   head.classList.toggle('compact', ui.view === VIEW_ALL || ui.view === ROOT || !!ui.reorder);
   let html = '';
   if (ui.view === VIEW_ALL && !ui.query) {
+    html += favHomeHtml(model);
     const tiles = model.folders.map(folderTileHtml).join('');
     html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${model.folders.length}</span></div>
       <div class="fm-folders">${tiles || '<div class="fm-empty" style="grid-column:1/-1">폴더가 없습니다. 위의 "새 폴더"로 만드세요</div>'}</div></section>`;
@@ -179,6 +182,7 @@ function renderMain(keepScroll) {
       ${gridHtml(model.root, ROOT, '모든 봇이 폴더에 들어 있습니다')}</section>`;
   } else if (ui.view === VIEW_ALL) {
     // 검색: 폴더 이름이 맞으면 폴더 타일, 봇 이름이 맞으면 폴더별로 봇을 보여 준다.
+    html += favSearchHtml();
     const hitFolders = model.folders.filter((f) => (f.name || '').toLowerCase().includes(ui.query));
     if (hitFolders.length) html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${hitFolders.length}</span></div><div class="fm-folders">${hitFolders.map(folderTileHtml).join('')}</div></section>`;
     for (const f of model.folders) {
@@ -194,12 +198,13 @@ function renderMain(keepScroll) {
     if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더나 봇이 없습니다</div>`;
   } else {
     const inRoot = ui.view === ROOT;
-    const ids = ui.view===VIEW_STARS ? plusStarIds() : inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
+    const stars = ui.view === VIEW_STARS;
+    const ids = stars ? favStarIds() : inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
     if (ui.query) {
       const unread = ids.filter((id) => !roster.resolved(id)).length;
-      html += `<p class="fm-note">${inRoot ? '폴더 밖' : '이 폴더'}에서 "${esc(ui.query)}" 검색${unread ? ` · 이름 미확인 ${unread}개 제외` : ''}</p>`;
+      html += `<p class="fm-note">${stars ? '즐겨찾기' : inRoot ? '폴더 밖' : '이 폴더'}에서 "${esc(ui.query)}" 검색${unread ? ` · 이름 미확인 ${unread}개 제외` : ''}</p>`;
     }
-    html += gridHtml(ids, inRoot ? ROOT : ui.view, ui.query ? '맞는 봇이 없습니다' : inRoot ? '모든 봇이 폴더에 들어 있습니다' : '비어 있음');
+    html += gridHtml(ids, inRoot ? ROOT : ui.view, ui.query ? '맞는 봇이 없습니다' : stars ? '아직 즐겨찾는 봇이 없습니다. 봇 칸의 ☆을 누르면 여기에 모입니다' : inRoot ? '모든 봇이 폴더에 들어 있습니다' : '비어 있음');
   }
   const scroller = ui.app.querySelector('.fm-scroll');
   const top = scroller.scrollTop;
@@ -256,7 +261,7 @@ function render(keepScroll = false) {
 // 지금 화면(폴더·폴더 밖)에 속한 봇. 모든 폴더 화면은 null.
 function viewIds() {
   if (ui.view === VIEW_ALL) return null;
-  if (ui.view === VIEW_STARS) return new Set(plusStarIds());
+  if (ui.view === VIEW_STARS) return new Set(favStarIds());
   const m = currentModel();
   return new Set(ui.view === ROOT ? m.root : (m.folders.find((f) => f.id === ui.view)?.data || []));
 }
@@ -779,11 +784,14 @@ async function loadPrefs() {
     if (saved && ['tiles', 'list'].includes(saved.display)) ui.display = saved.display;
     if (saved && typeof saved.view === 'string') ui.view = saved.view;
     ui.loadAll = !!(saved && saved.loadAll);
+    if (saved && FAV_SORTS.some(([k]) => k === saved.favSort)) fav.sort = saved.favSort;
+    fav.fold = !!(saved && saved.favFold);
   } catch {}
+  await favLoad();
 }
 
 function savePrefs() {
-  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll }); } catch {}
+  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold }); } catch {}
 }
 
 // ── 껍데기·이벤트 ──
@@ -810,7 +818,7 @@ function shellHtml() {
           <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
           <button data-act="check">${icon('scan')}정리 점검</button>
           <button data-act="reload">${icon('refresh')}새로 불러오기</button>
-          <button data-act="plus-stars">${icon('star')}즐겨찾는 봇</button>
+          <button data-act="fav-view">${icon('star')}즐겨찾는 봇</button>
           <button data-act="settings">${icon('gear')}설정 · 테마</button>
         </div>
       </div>
@@ -828,7 +836,7 @@ function shellHtml() {
           <button class="fm-btn primary fm-norm" data-act="move">${icon('folder')}폴더로 옮기기</button>
           <button class="fm-btn fm-norm" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
           <button class="fm-btn fm-norm" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
-          <button class="fm-btn fm-icon fm-norm" data-act="plus-toggle-stars" title="선택한 봇 즐겨찾기 추가 / 해제" aria-label="선택한 봇 즐겨찾기 추가 / 해제">${icon('star')}</button>
+          <button class="fm-btn fm-icon fm-norm" data-act="fav-selected" title="선택한 봇 즐겨찾기 추가 / 해제" aria-label="선택한 봇 즐겨찾기 추가 / 해제">${icon('star')}</button>
           <button class="fm-btn ghost fm-icon fm-norm" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
         </div>
       </main>
@@ -939,7 +947,11 @@ function locateBot(id) {
 }
 
 // 휴대폰용: 폴더 꾸미기 도구를 글자 버튼으로 모은 창.
-const FOLDER_ITEMS = [['image', 'image', '그림 바꾸기'], ['rename', 'edit', '이름 바꾸기'], ['color', 'palette', '색 바꾸기'], ['locate', 'locate', '사이드바에서 찾기'], ['folder-up', 'up', '위로 옮기기'], ['folder-down', 'down', '아래로 옮기기'], ['unfold', 'unfold', '폴더 삭제']];
+const FOLDER_ITEMS = [['fav-pin', 'star', '즐겨찾기에 고정'], ['image', 'image', '그림 바꾸기'], ['rename', 'edit', '이름 바꾸기'], ['color', 'palette', '색 바꾸기'], ['locate', 'locate', '사이드바에서 찾기'], ['folder-up', 'up', '위로 옮기기'], ['folder-down', 'down', '아래로 옮기기'], ['unfold', 'unfold', '폴더 삭제']];
+
+function folderItemLabel(act, text, fid) {
+  return act === 'fav-pin' && favIsPin(fid) ? '즐겨찾기 고정 해제' : text;
+}
 
 function runFolderAction(act, fid) {
   const run = {
@@ -950,6 +962,7 @@ function runFolderAction(act, fid) {
     'folder-up': () => shiftFolder(-1, fid),
     'folder-down': () => shiftFolder(1, fid),
     unfold: () => unfoldFolder(fid),
+    'fav-pin': () => favTogglePin(fid),
   }[act];
   run?.();
 }
@@ -961,7 +974,7 @@ async function folderMoreSheet(fid = ui.view) {
   const items = FOLDER_ITEMS.filter(([a]) => a !== 'locate');
   const act = await openModal(
     `<h3 id="fm-dialog-title">${esc(f.name || '폴더')}</h3>
-     <div class="fm-sheet">${items.map(([a, i, t]) => `<button class="fm-btn${a === 'unfold' ? ' danger' : ''}" data-a="${a}">${icon(i)}${t}</button>`).join('')}</div>
+     <div class="fm-sheet">${items.map(([a, i, t]) => `<button class="fm-btn${a === 'unfold' ? ' danger' : ''}" data-a="${a}">${icon(i)}${folderItemLabel(a, t, f.id)}</button>`).join('')}</div>
      <div class="fm-modal-actions"><button class="fm-btn" data-x>닫기</button></div>`,
     (modal, close) => {
       modal.querySelector('[data-x]').onclick = () => close(null);
@@ -988,7 +1001,7 @@ function openFolderMenu(fid, x, y) {
   const el = document.createElement('div');
   el.className = 'fm-ctx';
   el.setAttribute('role', 'menu');
-  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + FOLDER_ITEMS.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' ? ' class="danger"' : ''}>${icon(i)}${t}</button>`).join('');
+  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + FOLDER_ITEMS.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' ? ' class="danger"' : ''}>${icon(i)}${folderItemLabel(a, t, f.id)}</button>`).join('');
   document.body.append(el);
   const w = el.offsetWidth;
   const h = el.offsetHeight;
@@ -1054,7 +1067,7 @@ const ACTIONS = {
   check: () => runCheck(),
   reload: () => reload(),
   sidebar: () => openSidebarDialog(),
-  reorder: () => startReorder(),
+  reorder: () => { if (ui.view === VIEW_STARS) openView(VIEW_ALL); return startReorder(); },
   'reorder-save': () => finishReorder(),
   'reorder-cancel': () => cancelReorder(),
   'select-all': () => selectAllVisible(),
@@ -1071,6 +1084,8 @@ const ACTIONS = {
   'folder-up': () => shiftFolder(-1),
   'folder-down': () => shiftFolder(1),
   unfold: () => unfoldFolder(),
+  'fav-view': () => openView(VIEW_STARS),
+  'fav-selected': () => favToggleSelected(),
 };
 
 function bindEvents(root) {
@@ -1100,6 +1115,11 @@ function bindEvents(root) {
     if (nav) { const inRail = !!nav.closest('.fm-rail'); openView(inRail && nav.dataset.view === ui.view && ui.view !== VIEW_ALL && !ui.query ? VIEW_ALL : nav.dataset.view); if (inRail) ui.app.querySelector(`.fm-rail [data-view="${CSS.escape(nav.dataset.view)}"]`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); return; }
     const retry = t.closest('[data-retry]');
     if (retry) { rosterRetry([retry.dataset.retry]); return; }
+    const star = t.closest('[data-star]');
+    if (star) { if (!ui.reorder) favToggleStar(star.dataset.star); return; }
+    const sort = t.closest('[data-fav-sort]');
+    if (sort) { fav.sort = sort.dataset.favSort; savePrefs(); renderMain(true); return; }
+    if (t.closest('[data-fav-fold]')) { fav.fold = !fav.fold; savePrefs(); renderMain(true); return; }
     const loc = t.closest('[data-locate]');
     if (loc) { if (!ui.reorder) locateBot(loc.dataset.locate); return; }
     const card = t.closest('.fm-card');
@@ -1172,7 +1192,7 @@ async function openManager() {
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
-    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}</style>${shellHtml()}`;
+    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);
     bindEvents(document.querySelector('.fm-root'));

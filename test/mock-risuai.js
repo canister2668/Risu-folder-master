@@ -13,7 +13,7 @@
     ],
     customCSS: window.__legacyCSS || '',
   };
-  const store = new Map();
+  const store = new Map(Object.entries(window.__storeSeed || {}));
   const local = new Map(Object.entries(window.__localSeed || {}));
   window.__local = local;
   const svg = (i) => {

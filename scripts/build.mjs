@@ -19,6 +19,7 @@ export const SOURCES = [
   'src/ui/dialogs.js',
   'src/ui/templates-data.js',
   'src/ui/iconpicker.js',
+  'src/ui/favorites.js',
   'src/ui/app.js',
   'src/ui/drag.js',
   'src/ui/extras.js',

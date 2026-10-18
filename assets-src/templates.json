@@ -347,42 +347,84 @@
   "id": "아르곤",
   "slug": "argon",
   "cat": "아르곤",
-  "editable": false,
-  "signs": []
+  "signs": [
+   [
+    0.0766,
+    0.4258,
+    0.5136,
+    0.866
+   ]
+  ],
+  "sign": "아르곤"
  },
  {
   "id": "아르곤 작업완료",
   "slug": "argon-done",
   "cat": "아르곤",
-  "editable": false,
-  "signs": []
+  "signs": [
+   [
+    0.0837,
+    0.4729,
+    0.5455,
+    0.8955
+   ]
+  ],
+  "sign": "작업완료"
  },
  {
   "id": "아르곤 휴식중",
   "slug": "argon-rest",
   "cat": "아르곤",
-  "editable": false,
-  "signs": []
+  "signs": [
+   [
+    0.0805,
+    0.508,
+    0.5949,
+    0.941
+   ]
+  ],
+  "sign": "휴식중"
  },
  {
   "id": "아르곤 부끄러움",
   "slug": "argon-shy",
   "cat": "아르곤",
-  "editable": false,
-  "signs": []
+  "signs": [
+   [
+    0.0766,
+    0.4258,
+    0.5128,
+    0.866
+   ]
+  ],
+  "sign": "부끄러움"
  },
  {
   "id": "아르곤 이번만이에요",
   "slug": "argon-once",
   "cat": "아르곤",
-  "editable": false,
-  "signs": []
+  "signs": [
+   [
+    0.0789,
+    0.4226,
+    0.5104,
+    0.8644
+   ]
+  ],
+  "sign": "이번만이에요"
  },
  {
   "id": "아르곤 달달루방",
   "slug": "argon-room",
   "cat": "아르곤",
-  "editable": false,
-  "signs": []
+  "signs": [
+   [
+    0.059,
+    0.429,
+    0.5064,
+    0.8708
+   ]
+  ],
+  "sign": "달달루방"
  }
 ]

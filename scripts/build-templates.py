@@ -34,7 +34,7 @@ def main():
         if t.get('editable', True):
             open(os.path.join(OUT, 'blank', slug + '.webp'), 'wb').write(webp(os.path.join(SRC, 'blank', t['id'] + '.png'), 512, 92))
         thumb = base64.b64encode(webp(os.path.join(SRC, t['id'] + '.png'), 96, 72)).decode()
-        items.append({'slug': slug, 'name': t['id'], 'cat': t['cat'], 'signs': t['signs'], **({'editable': False} if t.get('editable') is False else {}), 'thumb': 'data:image/webp;base64,' + thumb})
+        items.append({'slug': slug, 'name': t['id'], 'cat': t['cat'], 'signs': t['signs'], **({'editable': False} if t.get('editable') is False else {}), **({'sign': t['sign']} if t.get('sign') else {}), 'thumb': 'data:image/webp;base64,' + thumb})
     shutil.copy(os.path.join(SRC, 'BlackHanSans-Regular.ttf'), os.path.join(OUT, 'font.ttf'))
     shutil.copy(os.path.join(SRC, 'OFL.txt'), os.path.join(OUT, 'OFL.txt'))
     js = ('// scripts/build-templates.py 가 만든다. 직접 고치지 말 것.\n'

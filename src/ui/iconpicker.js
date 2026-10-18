@@ -323,7 +323,7 @@ function openImagePicker(folder) {
           if (st.sel !== tpl) { st.sel = tpl; st.editing = false; }
           renderTpl(); refreshNew(); return;
         }
-        if (e.target.closest('[data-edit]') && st.sel?.editable !== false) { st.editing = true; st.text = [...name].slice(0, SIGN_MAX).join('') || st.sel.name; renderTpl(); refreshNew(); return; }
+        if (e.target.closest('[data-edit]') && st.sel?.editable !== false) { st.editing = true; st.text = [...name].slice(0, SIGN_MAX).join('') || st.sel.sign || st.sel.name; renderTpl(); refreshNew(); return; }
         if (e.target.closest('[data-orig]')) { st.editing = false; renderTpl(); refreshNew(); }
       });
       modal.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { st.tab = b.dataset.tab; renderBody(); refreshNew(); }; });

@@ -5,7 +5,7 @@ const dist = fs.readFileSync(path.join(__dirname, '../dist/risu-folder-master.pl
 const mock = fs.readFileSync(path.join(__dirname, 'mock-risuai.js'), 'utf8');
 const tdir = path.join(__dirname, '../templates');
 const tpl = {};
-for (const f of ['fantasy.webp', 'blank/fantasy.webp', 'multi.webp', 'blank/multi.webp', 'blank/modern.webp', 'font.ttf', 'argon.webp', 'argon-done.webp', 'argon-rest.webp', 'argon-shy.webp', 'argon-once.webp', 'argon-room.webp']) tpl[f] = fs.readFileSync(path.join(tdir, f)).toString('base64');
+for (const f of ['fantasy.webp', 'blank/fantasy.webp', 'multi.webp', 'blank/multi.webp', 'blank/modern.webp', 'font.ttf', 'argon.webp', 'argon-done.webp', 'argon-rest.webp', 'argon-shy.webp', 'argon-once.webp', 'argon-room.webp', 'blank/argon.webp', 'blank/argon-done.webp', 'blank/argon-rest.webp', 'blank/argon-shy.webp', 'blank/argon-once.webp', 'blank/argon-room.webp']) tpl[f] = fs.readFileSync(path.join(tdir, f)).toString('base64');
 const results = []; const ok = (c, m, x) => { results.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + m + (x !== undefined ? ' :: ' + JSON.stringify(x).slice(0, 300) : '')); };
 const shot = (p, n) => p.screenshot({ path: path.join(__dirname, 'shots', n + '.png') });
 const folderImg = (p, id) => p.evaluate((id) => window.__db.characterOrder.find((x) => x.id === id).imgFile, id);
@@ -50,7 +50,7 @@ async function boot(b, viewport) {
     await p.click('[data-cat="아르곤"]');
     ok(await p.locator('.fm-ip-tile').count() === 6, slug + ': category lists six icons');
     await p.click(`[data-tpl="${slug}"]`);
-    ok(await p.locator('[data-edit]').count() === 0, slug + ': fixed label does not offer unavailable blank');
+    ok(await p.locator('[data-edit]').count() === 1, slug + ': offers text change on the blank board');
     await p.click('[data-apply]');
     await p.waitForSelector('.fm-ip', {state:'detached'});
     await p.waitForTimeout(650); // Wait for folder save/readback and home rerender.
@@ -74,6 +74,12 @@ async function boot(b, viewport) {
   await p.click('.fm-head [data-act="image"]'); await p.waitForSelector('.fm-ip');
   await p.click('.fm-ip-tile[data-tpl="multi"]'); await p.click('[data-edit]'); await p.fill('[data-text]', '얼헌'); await p.waitForTimeout(900);
   await shot(p, 'picker-multi');
+  // 아르곤 빈 종이판에 새 글씨
+  await p.click('.fm-ip-tabs [data-tab="tpl"]').catch(() => {});
+  await p.click('[data-cat="아르곤"]'); await p.click('.fm-ip-tile[data-tpl="argon-rest"]'); await p.click('[data-edit]'); await p.fill('[data-text]', '보관함'); await p.waitForTimeout(900);
+  await shot(p, 'picker-argon');
+  const argonInk = await p.evaluate(() => { const c = document.querySelector('[data-new] canvas'); const d = c.getContext('2d').getImageData(0, 0, 512, 512).data; let n = 0, m = 0; for (let y = 0; y < 512; y++) for (let x = 0; x < 512; x++) { const i = (y * 512 + x) * 4; if (d[i] < 70 && d[i + 1] < 60 && d[i + 2] < 80) { if (x > 45 && x < 300 && y > 265 && y < 480) n++; else m++; } } return [n, m]; });
+  ok(argonInk[0] > 3000, 'argon blank board gets new letters inside the paper', argonInk);
   await p.click('.fm-ip-tabs [data-tab="mine"]'); await p.waitForTimeout(150);
   ok(await p.isVisible('.fm-ip-drop') && await p.evaluate(() => document.querySelector('[data-apply]').disabled), 'my-image tab starts empty with apply disabled');
   // 내 그림: 400x200 PNG 를 만들어 고른다
