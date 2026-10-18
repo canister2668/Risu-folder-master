@@ -342,5 +342,47 @@
     0.8789
    ]
   ]
+ },
+ {
+  "id": "아르곤",
+  "slug": "argon",
+  "cat": "아르곤",
+  "editable": false,
+  "signs": []
+ },
+ {
+  "id": "아르곤 작업완료",
+  "slug": "argon-done",
+  "cat": "아르곤",
+  "editable": false,
+  "signs": []
+ },
+ {
+  "id": "아르곤 휴식중",
+  "slug": "argon-rest",
+  "cat": "아르곤",
+  "editable": false,
+  "signs": []
+ },
+ {
+  "id": "아르곤 부끄러움",
+  "slug": "argon-shy",
+  "cat": "아르곤",
+  "editable": false,
+  "signs": []
+ },
+ {
+  "id": "아르곤 이번만이에요",
+  "slug": "argon-once",
+  "cat": "아르곤",
+  "editable": false,
+  "signs": []
+ },
+ {
+  "id": "아르곤 달달루방",
+  "slug": "argon-room",
+  "cat": "아르곤",
+  "editable": false,
+  "signs": []
  }
 ]

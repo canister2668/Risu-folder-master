@@ -5,7 +5,7 @@
 // 저장된 그림은 RisuAI 에셋이라 플러그인을 지우거나 GitHub에 닿지 않아도 그대로 남는다.
 
 const TEMPLATE_BASE = 'https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/templates/';
-const TEMPLATE_CATS = ['전체', '장르', '형식', '관리'];
+const TEMPLATE_CATS = ['전체', '장르', '형식', '관리', '아르곤'];
 const SIGN_FONT = 'FMSign';
 const SIGN_INK = '#282030';
 const SIGN_MAX = 8;
@@ -260,7 +260,9 @@ function openImagePicker(folder) {
       const renderTpl = () => {
         const list = TEMPLATES.filter((t) => st.cat === '전체' || t.cat === st.cat);
         const rec = TEMPLATES.map((t) => [t, templateScore(t, name)]).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([t]) => t);
-        const edit = !st.sel ? '<p class="fm-ip-hint">템플릿을 고르면 위에 미리 보입니다. 종이 글씨는 폴더 이름으로 바꿀 수 있어요.</p>'
+        const edit = !st.sel ? '<p class="fm-ip-hint">템플릿을 고르면 위에 미리 보입니다. 글씨 바꾸기를 지원하는 그림은 폴더 이름으로 바꿀 수 있어요.</p>'
+          : st.sel.editable === false
+            ? `<div class="fm-ip-editbar"><div><b>${esc(st.sel.name)}</b><small>문구가 포함된 완성형 아이콘입니다. 적용을 눌러 사용하세요.</small></div></div>`
           : st.editing
             ? `<div class="fm-ip-edit"><input class="fm-field" data-text maxlength="${SIGN_MAX}" placeholder="종이에 쓸 글자" aria-label="종이에 쓸 글자"><button class="fm-btn" data-orig>원래 글씨</button></div>
                <p class="fm-ip-hint">빈 종이판에 새로 씁니다. 종이 모양에 맞춰 줄과 크기를 자동으로 맞춥니다(최대 ${SIGN_MAX}자).</p>`
@@ -321,7 +323,7 @@ function openImagePicker(folder) {
           if (st.sel !== tpl) { st.sel = tpl; st.editing = false; }
           renderTpl(); refreshNew(); return;
         }
-        if (e.target.closest('[data-edit]')) { st.editing = true; st.text = [...name].slice(0, SIGN_MAX).join('') || st.sel.name; renderTpl(); refreshNew(); return; }
+        if (e.target.closest('[data-edit]') && st.sel?.editable !== false) { st.editing = true; st.text = [...name].slice(0, SIGN_MAX).join('') || st.sel.name; renderTpl(); refreshNew(); return; }
         if (e.target.closest('[data-orig]')) { st.editing = false; renderTpl(); refreshNew(); }
       });
       modal.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { st.tab = b.dataset.tab; renderBody(); refreshNew(); }; });

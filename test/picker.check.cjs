@@ -5,7 +5,7 @@ const dist = fs.readFileSync(path.join(__dirname, '../dist/risu-folder-master.pl
 const mock = fs.readFileSync(path.join(__dirname, 'mock-risuai.js'), 'utf8');
 const tdir = path.join(__dirname, '../templates');
 const tpl = {};
-for (const f of ['fantasy.webp', 'blank/fantasy.webp', 'multi.webp', 'blank/multi.webp', 'blank/modern.webp', 'font.ttf']) tpl[f] = fs.readFileSync(path.join(tdir, f)).toString('base64');
+for (const f of ['fantasy.webp', 'blank/fantasy.webp', 'multi.webp', 'blank/multi.webp', 'blank/modern.webp', 'font.ttf', 'argon.webp', 'argon-done.webp', 'argon-rest.webp', 'argon-shy.webp', 'argon-once.webp', 'argon-room.webp']) tpl[f] = fs.readFileSync(path.join(tdir, f)).toString('base64');
 const results = []; const ok = (c, m, x) => { results.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + m + (x !== undefined ? ' :: ' + JSON.stringify(x).slice(0, 300) : '')); };
 const shot = (p, n) => p.screenshot({ path: path.join(__dirname, 'shots', n + '.png') });
 const folderImg = (p, id) => p.evaluate((id) => window.__db.characterOrder.find((x) => x.id === id).imgFile, id);
@@ -34,7 +34,7 @@ async function boot(b, viewport) {
   ok(!(await p.$('.fm-ctx')), 'clicking outside closes the menu');
   await p.click('.fm-ftile[data-folder="f-th"]', { button: 'right' }); await p.waitForTimeout(150);
   await p.click('.fm-ctx [data-a="image"]'); await p.waitForSelector('.fm-ip');
-  ok(await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length) === 24, 'picker lists 24 templates', await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length));
+  ok(await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length) === 30, 'picker lists 30 templates', await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length));
   ok(!(await p.$('.fm-ip-sec')), 'no recommendation for an unrelated folder name');
   await p.click('.fm-ip-tile[data-tpl="fantasy"]'); await p.waitForTimeout(200);
   ok(await p.evaluate(() => !!document.querySelector('[data-new] img') && !document.querySelector('[data-apply]').disabled), 'choosing a template previews it and enables apply');
@@ -42,6 +42,20 @@ async function boot(b, viewport) {
   await p.click('[data-apply]'); await p.waitForTimeout(600);
   ok(await folderImg(p, 'f-th') === 'img3' && !(await p.$('.fm-ip')), 'applying a template saves the folder image');
   ok(await p.evaluate(() => window.__fetched.some((u) => u.endsWith('/templates/fantasy.webp'))), 'template fetched from GitHub templates/');
+
+  // All new fixed-label icons use the actual template download/save path.
+  for (const slug of ['argon', 'argon-done', 'argon-rest', 'argon-shy', 'argon-once', 'argon-room']) {
+    await p.click('.fm-ftile[data-folder="f-th"]', { button: 'right' });
+    await p.click('.fm-ctx [data-a="image"]');
+    await p.click('[data-cat="아르곤"]');
+    ok(await p.locator('.fm-ip-tile').count() === 6, slug + ': category lists six icons');
+    await p.click(`[data-tpl="${slug}"]`);
+    ok(await p.locator('[data-edit]').count() === 0, slug + ': fixed label does not offer unavailable blank');
+    await p.click('[data-apply]');
+    await p.waitForSelector('.fm-ip', {state:'detached'});
+    await p.waitForTimeout(650); // Wait for folder save/readback and home rerender.
+    ok(await p.evaluate(s => window.__fetched.some(u => u.endsWith('/templates/' + s + '.webp')), slug), slug + ': downloaded and applied');
+  }
 
   // 글씨 바꾸기
   await p.click('.fm-ftile[data-folder="f-abydos"]'); await p.waitForTimeout(250);
