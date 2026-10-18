@@ -10,7 +10,7 @@ function host(order) {
   };
   return { state, Risuai };
 }
-const files = ['src/core/util.js', 'src/core/order.js', 'src/core/store.js'];
+const files = ['src/core/util.js', 'src/core/order.js', 'src/core/shortcut.js', 'src/core/store.js'];
 const start = () => [{ id: 'f', name: 'F', data: ['a'] }, 'b', 'c'];
 
 test('commits run one after another on the latest data', async () => {
@@ -75,4 +75,29 @@ test('a write overwritten right after saving is reported and gets no undo entry'
   await s.saver.commit('m', (o) => s.moveBotsToRoot(o, ['a']));
   assert.match(s.saver.takeWarning(), /바뀌었습니다/);
   assert.equal(s.saver.history.length, 0);
+});
+
+test('sidebar favorites folder: every write keeps it first, the base never sees it, undo works', async () => {
+  const h = host(start());
+  const opts = { on: true, stars: ['b', 'a'] };
+  const s = load(files, { Risuai: h.Risuai, shortcutOpts: () => opts }, ['saver', 'shortcutState']);
+  assert.equal(await s.saver.syncShortcut(), 'written');
+  assert.deepEqual(h.state.order[0], { id: 'risu-folder-master-favorites', name: '⭐ 즐겨찾기', data: ['b', 'a'], color: 'yellow', imgFile: '', img: '' });
+  assert.deepEqual(JSON.parse(JSON.stringify(await s.readOrder())), start());
+  await s.saver.commit('move', (o) => s.moveBotsToFolder(o, ['c'], 'f'));
+  assert.equal(h.state.order[0].id, 'risu-folder-master-favorites');
+  assert.deepEqual(h.state.order.slice(1), [{ id: 'f', name: 'F', data: ['a', 'c'] }, 'b']);
+  await s.saver.undo();
+  assert.deepEqual(h.state.order.slice(1), start());
+  // sidebar rename + drag a bot into the shortcut folder → reverted
+  h.state.order[0] = { ...h.state.order[0], name: 'hacked', data: ['b', 'a', 'c'] };
+  h.state.order = h.state.order.filter((x) => x !== 'c');
+  assert.equal(await s.saver.syncShortcut(), 'written');
+  assert.equal(h.state.order[0].name, '⭐ 즐겨찾기');
+  assert.deepEqual(h.state.order[0].data, ['b', 'a']);
+  assert.deepEqual(h.state.order.slice(1), start());
+  assert.equal(await s.saver.syncShortcut(), 'same');
+  opts.on = false;
+  assert.equal(await s.saver.syncShortcut(), 'written');
+  assert.deepEqual(h.state.order, start());
 });

@@ -12,6 +12,7 @@
       'c10', 'c11', 'c12', 'c13', 'c14', 'c20',
     ],
     customCSS: window.__legacyCSS || '',
+    plugins: [{ name: 'risu_folder_master', enabled: true }],
   };
   const store = new Map(Object.entries(window.__storeSeed || {}));
   const local = new Map(Object.entries(window.__localSeed || {}));
@@ -53,11 +54,12 @@
     showContainer: async () => window.__calls.push('show'),
     hideContainer: async () => window.__calls.push('hide'),
     getLocalPluginStorage: async () => ({ getItem: async (k) => local.get(k) ?? null, setItem: async (k, v) => local.set(k, v) }),
-    pluginStorage: { getItem: async (k) => store.get(k) ?? null, setItem: async (k, v) => store.set(k, v) },
+    // __storeLag: 해적판처럼 쓰기가 서버에 늦게 반영되는 경우(바로 읽으면 옛 값).
+    pluginStorage: { getItem: async (k) => JSON.parse(JSON.stringify(store.get(k) ?? null)), setItem: async (k, v) => { const c = JSON.parse(JSON.stringify(v)); if (window.__storeLag) setTimeout(() => store.set(k, c), window.__storeLag); else store.set(k, c); } },
     getRootDocument: async () => ({
-      querySelectorAll: async () => window.__rootStyles.slice(),
+      querySelectorAll: async (sel) => { const m = /x-id="([^"]+)"/.exec(sel || ''); return window.__rootStyles.filter((el) => !m || !el['x-id'] || el['x-id'] === m[1]); },
       querySelector: async (s) => (s === 'head' ? { appendChild: async (el) => window.__rootStyles.push(el) } : null),
-      createElement: async () => { const el = { html: '', setAttribute: async () => {}, setInnerHTML: async (v) => { el.html = v; }, remove: async () => { window.__rootStyles = window.__rootStyles.filter((x) => x !== el); } }; return el; },
+      createElement: async () => { const el = { html: '', setAttribute: async (k, v) => { el[k] = v; }, setInnerHTML: async (v) => { el.html = v; }, remove: async () => { window.__rootStyles = window.__rootStyles.filter((x) => x !== el); } }; return el; },
     }),
   };
   window.__store = store;

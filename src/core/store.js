@@ -2,15 +2,34 @@
 
 const HISTORY_LIMIT = 20;
 
+// 즐겨찾기 바로가기 폴더(core/shortcut.js) 상태. last = 마지막으로 확인한 base(사이드바 손질 복구 기준).
+const shortcutState = { last: null, dbOk: false };
+
+function currentShortcutOpts() {
+  return typeof shortcutOpts === 'function' ? shortcutOpts() : null;
+}
+
 async function readDatabase(keys) {
   const db = await Risuai.getDatabase(keys);
   if (!db) throw new Error('데이터베이스 접근 권한이 필요합니다. 권한 요청 창에서 허용해 주세요');
+  shortcutState.dbOk = true;
   return db;
 }
 
-async function readOrder() {
+// 저장된 그대로(바로가기 폴더 포함). 사이드바와 칸을 맞춰 볼 때만 쓴다.
+async function readRawOrder() {
   const db = await readDatabase(['characterOrder']);
   return cloneOrder(db.characterOrder);
+}
+
+// 폴더 마스터가 다루는 순서: 바로가기 폴더를 빼고 사이드바 손질 흔적을 고친 것.
+async function readOrder() {
+  return shortcutBase(await readRawOrder(), shortcutState.last);
+}
+
+// base 를 저장할 모양(바로가기 폴더 포함)으로.
+function rawFor(base, raw) {
+  return keepShortcutImg(withShortcut(base, currentShortcutOpts()), raw);
 }
 
 // 화면에 필요한 가벼운 정보만 남긴다.
@@ -48,11 +67,31 @@ const saver = {
   // v3 에는 원자적 비교-쓰기가 없다(읽기와 setDatabaseLite 가 따로 오간다). 완전히 막을 수는 없으므로 창을 좁힌다:
   // 쓰기 직전에 다시 읽어 그 사이 바뀌었으면 최신 값에 같은 작업을 다시 적용하고, 쓴 뒤에는 다시 읽어 결과를 확인한다.
   async writeChecked(before, next) {
-    const latest = await readOrder();
+    const raw = await readRawOrder();
+    const latest = shortcutBase(raw, shortcutState.last);
     if (JSON.stringify(latest) !== JSON.stringify(before)) return 'changed';
-    await Risuai.setDatabaseLite({ characterOrder: next });
+    await Risuai.setDatabaseLite({ characterOrder: rawFor(next, raw) });
     const after = await readOrder();
-    return JSON.stringify(after) === JSON.stringify(cloneOrder(next)) ? 'ok' : 'drift';
+    const ok = JSON.stringify(after) === JSON.stringify(cloneOrder(next));
+    if (ok) shortcutState.last = cloneOrder(next);
+    return ok ? 'ok' : 'drift';
+  },
+
+  // 바로가기 폴더만 맞춘다(즐겨찾기 변경·사이드바에서 고친 것 되돌리기). 되돌리기 기록은 남기지 않는다.
+  // 반환: 'written' | 'same'
+  syncShortcut() {
+    const job = this.queue.then(async () => {
+      const raw = await readRawOrder();
+      const base = shortcutBase(raw, shortcutState.last);
+      const next = rawFor(base, raw);
+      shortcutState.last = base;
+      if (JSON.stringify(next) === JSON.stringify(raw)) return 'same';
+      validateOrder(next);
+      await Risuai.setDatabaseLite({ characterOrder: next });
+      return 'written';
+    });
+    this.queue = job.catch(() => {});
+    return job;
   },
 
   // mutate(최신 순서 사본) → 새 순서 | null(변경 없음). 최신 값이 바뀌면 mutate 를 다시 부른다.

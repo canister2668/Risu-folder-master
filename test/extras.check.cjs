@@ -38,7 +38,7 @@ const assert = require('node:assert/strict');
     await page.hover('.fm-card[data-id="c10"]'); await page.click('.fm-card[data-id="c10"] [data-star]');
     await page.waitForTimeout(250);
     assert.equal(await page.locator('.fm-card.sel').count(),0, 'star button does not select the card');
-    assert.deepEqual(await fav(),{stars:['c12','c10'],pins:['f-th']});
+    assert.deepEqual(await fav(),{stars:['c12','c10'],pins:['f-th'],folder:{on:false,name:'',imgFile:''}});
     assert.equal(await page.locator('.fm-fav-home .fm-card').count(),2);
     assert.equal(await page.locator('.fm-fav-home .fm-card[data-id="c12"] .fm-star.on').count(),1);
     // 선택 막대 별 버튼(여러 개)
@@ -86,7 +86,7 @@ const assert = require('node:assert/strict');
     await page.click('[data-fav-fold]');
     // 옛 기기 저장분(1.0.3~1.0.4)은 서버에 없을 때 한 번 옮긴다.
     await boot({'risuFolderMaster.extras':{theme:'classic',stars:['c11'],pins:['f-ba']}}, {});
-    assert.deepEqual(await fav(),{stars:['c11'],pins:['f-ba']});
+    assert.deepEqual(await fav(),{stars:['c11'],pins:['f-ba'],folder:{on:false,name:'',imgFile:''}});
     assert.equal(await page.locator('.fm-fav-home .fm-card[data-id="c11"]').count(),1);
     await page.setViewportSize({width:390,height:844});
     await settings(); await page.click('[data-theme="blue"]'); await page.click('.fm-modal [data-ok]');

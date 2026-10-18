@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { load } from './load.mjs';
 
-const files = ['src/core/util.js', 'src/core/order.js', 'src/core/store.js', 'src/core/roster.js'];
+const files = ['src/core/util.js', 'src/core/order.js', 'src/core/shortcut.js', 'src/core/store.js', 'src/core/roster.js'];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // kind: 'haejeok' (문자열 chaId 지원) | 'official' (숫자 index 만)

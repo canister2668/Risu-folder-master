@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.5
+//@display-name 📁 Risu 폴더 마스터 v1.0.6
 //@api 3.0
-//@version 1.0.5
+//@version 1.0.6
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.5 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.0.6 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.5";
+const FM_VERSION = "1.0.6";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -323,20 +323,141 @@ function removeGhosts(order, validIds) {
   return dropEmptyFolders(out);
 }
 
+// ── src/core/shortcut.js ──
+// 사이드바 즐겨찾기 바로가기 폴더. 봇을 복사하지 않고 같은 봇 ID를 한 번 더 적는 폴더다
+// (사이드바에서 누르면 같은 봇·같은 채팅이 열린다. RisuAI는 순서 목록의 같은 ID를 자리마다 그리고 지우지 않는다).
+// 이 폴더의 주인은 폴더 마스터다. 내용·이름·그림은 즐겨찾기 설정에서 만들고, 사이드바에서 고친 것은 되돌린다.
+// 폴더 마스터의 다른 계산은 모두 이 폴더를 뺀 순서(base)로 한다. 호스트 API를 부르지 않는 순수 연산이다.
+
+const SHORTCUT_ID = 'risu-folder-master-favorites';
+const SHORTCUT_NAME = '⭐ 즐겨찾기';
+
+function isShortcut(item) {
+  return isFolder(item) && item.id === SHORTCUT_ID;
+}
+
+// 봇이 들어 있는 곳: 폴더 id, 폴더 밖이면 null, 없으면 undefined.
+function botContainer(order, id) {
+  for (const item of order || []) {
+    if (item === id) return null;
+    if (isFolder(item) && !isShortcut(item) && Array.isArray(item.data) && item.data.includes(id)) return item.id;
+  }
+  return undefined;
+}
+
+function dropBotAt(order, id, keepIndex) {
+  let n = -1;
+  const out = [];
+  for (const item of order) {
+    if (item === id) { n++; if (n === keepIndex) out.push(item); continue; }
+    if (isFolder(item)) {
+      const data = item.data.filter((x) => x !== id || ++n === keepIndex);
+      if (data.length) out.push(data.length === item.data.length ? item : { ...item, data });
+      continue;
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+// 저장된 순서 → 바로가기 폴더를 뺀 순서. 사이드바 손질로 생긴 흔적을 지난 순서(last, base 모양)를 보고 고친다.
+//  - 바로가기 폴더로 끌려 들어가 원래 자리를 잃은 봇: 지난 자리로, 모르면 폴더 밖 끝으로.
+//  - 바로가기 폴더에서 끌려 나와 두 번 있게 된 봇: 지난 순서에서 한 번이었으면 지난 자리 하나만 남긴다.
+// 지난 순서를 모르면 겹침은 건드리지 않는다(정리 점검이 알려 준다).
+function shortcutBase(raw, last) {
+  const order = cloneOrder(raw);
+  const sc = order.find(isShortcut);
+  let base = order.filter((x) => !isShortcut(x));
+  if (last) {
+    const lastIds = orderBotIds(last);
+    const counts = new Map();
+    for (const id of orderBotIds(base)) counts.set(id, (counts.get(id) || 0) + 1);
+    for (const [id, n] of counts) {
+      if (n < 2 || lastIds.filter((x) => x === id).length !== 1) continue;
+      const want = botContainer(last, id);
+      const spots = [];
+      for (const item of base) {
+        if (item === id) spots.push(null);
+        else if (isFolder(item)) for (const x of item.data) if (x === id) spots.push(item.id);
+      }
+      const keep = Math.max(0, spots.indexOf(want));
+      base = dropBotAt(base, id, keep);
+    }
+  }
+  if (sc) {
+    const present = new Set(orderBotIds(base));
+    for (const id of sc.data) {
+      if (present.has(id)) continue;
+      present.add(id);
+      const fid = last ? botContainer(last, id) : undefined;
+      const folder = fid ? base.find((x) => isFolder(x) && x.id === fid) : null;
+      if (folder) {
+        const at = Math.min(last.find((x) => isFolder(x) && x.id === fid).data.indexOf(id), folder.data.length);
+        const data = [...folder.data];
+        data.splice(at, 0, id);
+        base = base.map((x) => (x === folder ? { ...folder, data } : x));
+      } else {
+        base.push(id);
+      }
+    }
+  }
+  return base;
+}
+
+// base 앞에 바로가기 폴더를 붙인다. 켜져 있지 않거나 순서에 있는 별표 봇이 없으면 붙이지 않는다(RisuAI는 빈 폴더를 지운다).
+// opts = { on, stars, name, color, imgFile }
+function withShortcut(base, opts) {
+  const plainBase = base.filter((x) => !isShortcut(x));
+  if (!opts || !opts.on) return plainBase;
+  const live = new Set(orderBotIds(plainBase));
+  const data = [...new Set((opts.stars || []).filter((id) => live.has(id)))];
+  if (!data.length) return plainBase;
+  const folder = { id: SHORTCUT_ID, name: opts.name || SHORTCUT_NAME, data, color: opts.color || 'yellow', imgFile: opts.imgFile || '' };
+  if (!opts.imgFile) folder.img = '';
+  return [folder, ...plainBase];
+}
+
+// 저장할 때 바로가기 폴더의 그림 칸(img)은 RisuAI가 채운 값을 그대로 둔다(imgFile 이 같을 때).
+function keepShortcutImg(next, raw) {
+  const old = (raw || []).find(isShortcut);
+  const now = next.find(isShortcut);
+  if (old && now && old.imgFile === now.imgFile && old.img && now.imgFile) now.img = old.img;
+  return next;
+}
+
 // ── src/core/store.js ──
 // 호스트(RisuAI) 읽기·쓰기. 저장은 한 줄로 세워 차례로 하고, 매번 최신 데이터 위에서 고친다.
 
 const HISTORY_LIMIT = 20;
 
+// 즐겨찾기 바로가기 폴더(core/shortcut.js) 상태. last = 마지막으로 확인한 base(사이드바 손질 복구 기준).
+const shortcutState = { last: null, dbOk: false };
+
+function currentShortcutOpts() {
+  return typeof shortcutOpts === 'function' ? shortcutOpts() : null;
+}
+
 async function readDatabase(keys) {
   const db = await Risuai.getDatabase(keys);
   if (!db) throw new Error('데이터베이스 접근 권한이 필요합니다. 권한 요청 창에서 허용해 주세요');
+  shortcutState.dbOk = true;
   return db;
 }
 
-async function readOrder() {
+// 저장된 그대로(바로가기 폴더 포함). 사이드바와 칸을 맞춰 볼 때만 쓴다.
+async function readRawOrder() {
   const db = await readDatabase(['characterOrder']);
   return cloneOrder(db.characterOrder);
+}
+
+// 폴더 마스터가 다루는 순서: 바로가기 폴더를 빼고 사이드바 손질 흔적을 고친 것.
+async function readOrder() {
+  return shortcutBase(await readRawOrder(), shortcutState.last);
+}
+
+// base 를 저장할 모양(바로가기 폴더 포함)으로.
+function rawFor(base, raw) {
+  return keepShortcutImg(withShortcut(base, currentShortcutOpts()), raw);
 }
 
 // 화면에 필요한 가벼운 정보만 남긴다.
@@ -374,11 +495,31 @@ const saver = {
   // v3 에는 원자적 비교-쓰기가 없다(읽기와 setDatabaseLite 가 따로 오간다). 완전히 막을 수는 없으므로 창을 좁힌다:
   // 쓰기 직전에 다시 읽어 그 사이 바뀌었으면 최신 값에 같은 작업을 다시 적용하고, 쓴 뒤에는 다시 읽어 결과를 확인한다.
   async writeChecked(before, next) {
-    const latest = await readOrder();
+    const raw = await readRawOrder();
+    const latest = shortcutBase(raw, shortcutState.last);
     if (JSON.stringify(latest) !== JSON.stringify(before)) return 'changed';
-    await Risuai.setDatabaseLite({ characterOrder: next });
+    await Risuai.setDatabaseLite({ characterOrder: rawFor(next, raw) });
     const after = await readOrder();
-    return JSON.stringify(after) === JSON.stringify(cloneOrder(next)) ? 'ok' : 'drift';
+    const ok = JSON.stringify(after) === JSON.stringify(cloneOrder(next));
+    if (ok) shortcutState.last = cloneOrder(next);
+    return ok ? 'ok' : 'drift';
+  },
+
+  // 바로가기 폴더만 맞춘다(즐겨찾기 변경·사이드바에서 고친 것 되돌리기). 되돌리기 기록은 남기지 않는다.
+  // 반환: 'written' | 'same'
+  syncShortcut() {
+    const job = this.queue.then(async () => {
+      const raw = await readRawOrder();
+      const base = shortcutBase(raw, shortcutState.last);
+      const next = rawFor(base, raw);
+      shortcutState.last = base;
+      if (JSON.stringify(next) === JSON.stringify(raw)) return 'same';
+      validateOrder(next);
+      await Risuai.setDatabaseLite({ characterOrder: next });
+      return 'written';
+    });
+    this.queue = job.catch(() => {});
+    return job;
   },
 
   // mutate(최신 순서 사본) → 새 순서 | null(변경 없음). 최신 값이 바뀌면 mutate 를 다시 부른다.
@@ -1978,34 +2119,75 @@ function openImagePicker(folder) {
 }
 
 // ── src/ui/favorites.js ──
-// 즐겨찾기: 봇 별표와 폴더 고정. characterOrder 는 건드리지 않고 id 목록만 따로 둔다.
+// 즐겨찾기: 봇 별표와 폴더 고정, 사이드바 바로가기 폴더 설정.
 // 서버 플러그인 저장소에 두어 기기끼리 같이 쓴다. 1.0.3~1.0.4 는 기기 저장소(risuFolderMaster.extras)에 있었으므로
 // 서버에 아직 없으면 처음 한 번 옮긴다.
 // 쓸 때는 서버 값을 다시 읽어 이번 변경만 얹는다(다른 기기에서 넣은 별표를 덮어쓰지 않게).
+// 바로가기 폴더(core/shortcut.js)를 켜면 별표가 바뀔 때마다 사이드바 폴더도 맞춘다.
 
 const FAV_KEY = 'risuFolderMaster.favorites';
 const FAV_LEGACY_KEY = 'risuFolderMaster.extras';
 const FAV_SORTS = [['added', '추가한 순'], ['recent', '최근 대화'], ['name', '이름']];
 const FAV_HOME_MAX = 12;
-const fav = { stars: [], pins: [], sort: 'added', fold: false };
+const FAV_POLL_MS = 4000;
+const SHORTCUT_GUARD_XID = 'risu-folder-master-favorites-guard';
+const PLUGIN_NAME = 'risu_folder_master';
+const fav = { stars: [], pins: [], folder: favFolderNorm(null), sort: 'added', fold: false };
 let favQueue = Promise.resolve();
+let favPollTimer = null;
+// 해적판은 setItem 이 서버에 늦게 반영되어 바로 읽으면 옛 값이 온다. 아직 반영 안 된 내 변경을 기억해 읽을 때마다 다시 얹는다.
+const favPending = [];
+const FAV_PENDING_MS = 60000;
 
 function favNorm(v) {
   return Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === 'string' && x))] : [];
 }
 
+function favFolderNorm(v) {
+  const o = v && typeof v === 'object' ? v : {};
+  return {
+    on: o.on === true,
+    name: typeof o.name === 'string' ? o.name.slice(0, 80) : '',
+    imgFile: typeof o.imgFile === 'string' ? o.imgFile : '',
+  };
+}
+
+function favRecord(v) {
+  const o = v && typeof v === 'object' ? v : {};
+  return { stars: favNorm(o.stars), pins: favNorm(o.pins), folder: favFolderNorm(o.folder) };
+}
+
+function shortcutOpts() {
+  return { on: fav.folder.on, stars: fav.stars, name: fav.folder.name, imgFile: fav.folder.imgFile };
+}
+
+function favReflected(state, op) {
+  if (op.key === 'folder') return Object.entries(op.set).every(([k, v]) => state.folder[k] === favFolderNorm({ ...state.folder, [k]: v })[k]);
+  return (op.add || []).every((id) => state[op.key].includes(id)) && (op.remove || []).every((id) => !state[op.key].includes(id));
+}
+
+// 서버 값 + 아직 반영되지 않은 내 변경.
+async function favRead() {
+  const saved = await Risuai.pluginStorage.getItem(FAV_KEY);
+  let state = favRecord(saved);
+  const now = Date.now();
+  for (let i = favPending.length - 1; i >= 0; i--) {
+    if (now - favPending[i].at > FAV_PENDING_MS || favReflected(state, favPending[i].op)) favPending.splice(i, 1);
+  }
+  for (const { op } of favPending) state = favApply(state, op);
+  return { saved, state };
+}
+
 async function favLoad() {
   try {
-    const saved = await Risuai.pluginStorage.getItem(FAV_KEY);
+    const { saved, state } = await favRead();
     if (saved && typeof saved === 'object') {
-      fav.stars = favNorm(saved.stars);
-      fav.pins = favNorm(saved.pins);
+      Object.assign(fav, state);
       return;
     }
     const legacy = await ui.prefs?.getItem(FAV_LEGACY_KEY);
-    fav.stars = favNorm(legacy?.stars);
-    fav.pins = favNorm(legacy?.pins);
-    if (fav.stars.length || fav.pins.length) await Risuai.pluginStorage.setItem(FAV_KEY, { stars: fav.stars, pins: fav.pins });
+    Object.assign(fav, favRecord({ stars: legacy?.stars, pins: legacy?.pins }));
+    if (fav.stars.length || fav.pins.length) await Risuai.pluginStorage.setItem(FAV_KEY, favRecord(fav));
   } catch {}
 }
 
@@ -2014,10 +2196,12 @@ function favPrune(state) {
   if (!ui.order.length) return state;
   const bots = new Set(orderBotIds(ui.order));
   const folders = new Set(ui.order.filter(isFolder).map((f) => f.id));
-  return { stars: state.stars.filter((id) => bots.has(id)), pins: state.pins.filter((id) => folders.has(id)) };
+  return { ...state, stars: state.stars.filter((id) => bots.has(id)), pins: state.pins.filter((id) => folders.has(id)) };
 }
 
+// op = { key: 'stars'|'pins', add?, remove? } | { key: 'folder', set }
 function favApply(state, op) {
+  if (op.key === 'folder') return { ...state, folder: favFolderNorm({ ...state.folder, ...op.set }) };
   const list = state[op.key].filter((id) => !op.remove?.includes(id));
   for (const id of op.add || []) if (!list.includes(id)) list.push(id);
   return { ...state, [op.key]: list };
@@ -2027,14 +2211,93 @@ function favChange(op) {
   Object.assign(fav, favApply(fav, op));
   render(true);
   favQueue = favQueue.then(async () => {
-    const cur = await Risuai.pluginStorage.getItem(FAV_KEY);
-    const base = cur && typeof cur === 'object' ? { stars: favNorm(cur.stars), pins: favNorm(cur.pins) } : { stars: [], pins: [] };
-    const next = favPrune(favApply(base, op));
+    const { state } = await favRead();
+    const next = favPrune(favApply(state, op));
+    favPending.push({ op, at: Date.now() });
     await Risuai.pluginStorage.setItem(FAV_KEY, next);
-    fav.stars = next.stars;
-    fav.pins = next.pins;
-  }).catch(() => toast('즐겨찾기를 저장하지 못했습니다', { error: true })).then(() => render(true));
+    Object.assign(fav, next);
+    if (shortcutState.dbOk && (fav.folder.on || op.key === 'folder')) await saver.syncShortcut();
+    if (op.key === 'folder') await shortcutGuard();
+  }).catch((err) => toast('즐겨찾기를 저장하지 못했습니다: ' + errorText(err), { error: true })).then(() => render(true));
   return favQueue;
+}
+
+// ── 사이드바 바로가기 폴더 ──
+
+// 사이드바에서 바로가기 폴더(맨 위 폴더)를 끌 수 없게 한다. Chromium 계열만 막히고, 오른쪽 클릭 메뉴(이름·색·그림)는
+// 막을 수 없으므로 그 밖의 손질은 syncShortcut 이 되돌린다. CSS 는 DOMPurify 를 거치므로 < > & 를 쓰지 않는다.
+function shortcutGuardCSS() {
+  return SIDEBAR_SCROLL.split(',').map((sel) => {
+    const top = `${sel.trim()} .group:not(.z-10):nth-child(1 of .group)`;
+    return `${top},${top} *,${top} + .rounded-lg *{-webkit-user-drag:none!important}\n${top} + .rounded-lg .h-4{pointer-events:none!important}`;
+  }).join('\n');
+}
+
+async function shortcutGuard() {
+  const on = fav.folder.on && fav.stars.length > 0;
+  try {
+    const doc = on ? await Risuai.getRootDocument() : rootDoc;
+    if (!doc) return;
+    rootDoc = doc;
+    await setRootStyle(doc, SHORTCUT_GUARD_XID, on ? shortcutGuardCSS() : '');
+  } catch {}
+}
+
+// 창을 한 번 연 뒤(DB 권한을 이미 받은 뒤)에만 돈다. 다른 기기에서 바꾼 즐겨찾기도 다시 읽어 맞춘다.
+function shortcutPollStart() {
+  if (favPollTimer || !fav.folder.on || !shortcutState.dbOk) return;
+  favPollTimer = setInterval(async () => {
+    try {
+      Object.assign(fav, (await favRead()).state);
+      if (!fav.folder.on) { shortcutPollStop(); await saver.syncShortcut(); return; }
+      if (await saver.syncShortcut() === 'written' && ui.app) { ui.order = await readOrder(); render(true); }
+    } catch {}
+  }, FAV_POLL_MS);
+}
+
+function shortcutPollStop() {
+  clearInterval(favPollTimer);
+  favPollTimer = null;
+}
+
+async function shortcutStartup() {
+  await favLoad();
+  if (fav.folder.on) await shortcutGuard();
+}
+
+// 플러그인을 지우거나 끌 때 바로가기 폴더를 지운다. RisuAI는 목록에서 먼저 빼고 플러그인을 다시 불러오므로,
+// 이때 목록에 켜진 채로 남아 있으면 단순 다시 불러오기(업데이트·다른 플러그인 변경)라 그대로 둔다.
+// 호스트가 정리를 1초까지만 기다리므로 권한 창이 필요하면(3일 지남) 정리하지 못할 수 있다. 확실히 지우려면 먼저 옵션을 끈다.
+async function shortcutUnloadCleanup() {
+  shortcutPollStop();
+  if (!fav.folder.on) return;
+  const db = await Risuai.getDatabase(['plugins', 'characterOrder']);
+  if (!db) return;
+  const me = (Array.isArray(db.plugins) ? db.plugins : []).find((p) => p && p.name === PLUGIN_NAME);
+  if (me && me.enabled !== false) return;
+  const raw = cloneOrder(db.characterOrder);
+  if (!raw.some(isShortcut)) return;
+  await Risuai.setDatabaseLite({ characterOrder: shortcutBase(raw, shortcutState.last) });
+}
+
+async function shortcutToggle(on) {
+  if (on && !fav.stars.length) toast('즐겨찾는 봇이 생기면 사이드바 맨 위에 폴더가 생깁니다');
+  await favChange({ key: 'folder', set: { on } });
+  if (on) shortcutPollStart(); else shortcutPollStop();
+  toast(on ? '사이드바 맨 위에 즐겨찾기 폴더를 만들었습니다' : '사이드바 즐겨찾기 폴더를 지웠습니다');
+}
+
+async function shortcutRename() {
+  const name = await askText('사이드바 즐겨찾기 폴더 이름', { value: fav.folder.name || SHORTCUT_NAME, confirm: '바꾸기' });
+  if (!name) return;
+  await favChange({ key: 'folder', set: { name: name === SHORTCUT_NAME ? '' : name } });
+}
+
+async function shortcutImage() {
+  const result = await openImagePicker({ name: (fav.folder.name || SHORTCUT_NAME).replace(/^[^\p{L}\p{N}]+/u, ''), imgFile: fav.folder.imgFile, color: 'yellow' });
+  if (!result) return;
+  await favChange({ key: 'folder', set: { imgFile: result.reset ? '' : result.path } });
+  toast(result.reset ? '즐겨찾기 폴더 그림을 기본으로 되돌렸습니다' : fav.folder.on ? '즐겨찾기 폴더 그림을 바꿨습니다(사이드바에도 적용)' : '즐겨찾기 폴더 그림을 바꿨습니다(사이드바 폴더를 켜면 적용)');
 }
 
 function favIsStar(id) { return fav.stars.includes(id); }
@@ -2091,7 +2354,7 @@ function favStarButton(id) {
 
 function favRailHtml(model, nav) {
   const pins = favPinnedFolders(model);
-  return nav(`data-view="${VIEW_STARS}"`, `<span class="fm-thumb plain fm-fav-ic">${icon('star')}</span>`, '즐겨찾기', favStarIds().length, ui.view === VIEW_STARS ? ' on' : '')
+  return nav(`data-view="${VIEW_STARS}"`, favIconHtml(), '즐겨찾기', favStarIds().length, ui.view === VIEW_STARS ? ' on' : '')
     + (pins.length ? `<div class="fm-rail-label fm-fav-label"><span>고정한 폴더</span></div>` + pins.map((f) =>
       nav(`data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}"`, folderThumb(f), f.name || '이름 없음', f.data.length, ui.view === f.id ? ' on' : '')).join('') : '');
 }
@@ -2099,8 +2362,49 @@ function favRailHtml(model, nav) {
 function favHeadHtml() {
   const n = favStarIds().length;
   const sorts = FAV_SORTS.map(([k, t]) => `<button data-fav-sort="${k}" class="${fav.sort === k ? 'on' : ''}" aria-pressed="${fav.sort === k}">${t}</button>`).join('');
-  return `${backButton(`<span class="fm-thumb plain fm-fav-ic">${icon('star')}</span>`)}<div class="fm-head-text"><h2>즐겨찾는 봇</h2><p>${n}개 · 원래 폴더 위치는 그대로입니다</p></div>
+  return `${backButton(favIconHtml())}<div class="fm-head-text" data-fav-menu><h2>즐겨찾는 봇</h2><p>${n}개 · 원래 폴더 위치는 그대로입니다</p></div>
     <div class="fm-head-actions"><div class="fm-fav-sort" role="group" aria-label="정렬">${sorts}</div>${ui.reorder ? '' : `<button class="fm-btn" data-act="select-all">${icon('select')}<span class="fm-text">전체 선택</span></button>`}</div>`;
+}
+
+// 켜기·끄기 스위치. 누르면 바로 바뀐다(확인창 없음).
+function favSwitchHtml(on, attrs, label) {
+  return `<button class="fm-switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(label)}" title="${esc(label)}" ${attrs}><i></i></button>`;
+}
+
+// 즐겨찾기 화면 위: 사이드바 바로가기 폴더 토글·이름·그림.
+function favShortcutBarHtml() {
+  const on = fav.folder.on;
+  const thumb = folderThumb({ imgFile: fav.folder.imgFile, color: 'yellow' });
+  return `<div class="fm-fav-bar${on ? ' on' : ''}"><button class="fm-fav-bar-thumb" data-act="fav-folder-image" title="그림 바꾸기" aria-label="즐겨찾기 폴더 그림 바꾸기">${thumb}</button><div class="fm-fav-bar-text"><b>사이드바 즐겨찾기 폴더</b>
+    <small>${on ? `RisuAI 사이드바 맨 위 「${esc(fav.folder.name || SHORTCUT_NAME)}」에서 바로 엽니다. 봇은 복사되지 않고 원래 폴더에도 그대로 있습니다. 이 폴더는 여기서만 고칠 수 있고, 사이드바에서 고친 것은 되돌아갑니다.` : '켜면 RisuAI 사이드바 맨 위에 즐겨찾는 봇의 바로가기 폴더가 생깁니다. 봇은 복사되지 않습니다. 플러그인을 지우기 전에 끄면 깔끔하게 정리됩니다.'}</small></div>
+    <div class="fm-fav-bar-acts"><button class="fm-btn" data-act="fav-folder-rename">${icon('edit')}<span class="fm-text">이름</span></button><button class="fm-btn" data-act="fav-folder-image">${icon('image')}<span class="fm-text">그림</span></button>
+    ${favSwitchHtml(on, 'data-act="fav-folder-toggle"', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div></div>`;
+}
+
+// 즐겨찾기 아이콘: 고른 그림이 있으면 그 그림, 없으면 별.
+function favIconHtml() {
+  return fav.folder.imgFile ? folderThumb({ imgFile: fav.folder.imgFile, color: 'yellow' }) : `<span class="fm-thumb plain fm-fav-ic">${icon('star')}</span>`;
+}
+
+function favFolderTitle() {
+  return fav.folder.name || SHORTCUT_NAME;
+}
+
+// 왼쪽 목록 「즐겨찾기」·즐겨찾기 머리에서 오른쪽 클릭(길게 누르기) 메뉴.
+function favMenuItems() {
+  return [
+    ['fav-image', 'image', '그림 바꾸기'],
+    ['fav-rename', 'edit', '이름 바꾸기'],
+    ['fav-toggle', 'sidebar', fav.folder.on ? '사이드바 폴더 끄기' : '사이드바 폴더 켜기'],
+  ];
+}
+
+function runFavMenuAction(act) {
+  ({ 'fav-image': shortcutImage, 'fav-rename': shortcutRename, 'fav-toggle': favFolderToggle })[act]?.();
+}
+
+function favFolderToggle() {
+  return shortcutToggle(!fav.folder.on);
 }
 
 // 첫 화면 맨 위: 고정한 폴더 + 별표한 봇(최대 12개).
@@ -2110,7 +2414,7 @@ function favHomeHtml(model) {
   const stars = favStarIds();
   if (!pins.length && !stars.length) return '';
   const more = `<button data-open="${VIEW_STARS}">모두 보기${stars.length > FAV_HOME_MAX ? ` ${stars.length}` : ''}</button>`;
-  let html = `<section class="fm-section fm-fav-home"><div class="fm-section-head"><span class="fm-fav-ic">${icon('star')}</span><h3>즐겨찾기</h3><span>${pins.length + stars.length}</span>
+  let html = `<section class="fm-section fm-fav-home"><div class="fm-section-head" data-fav-menu title="오른쪽 클릭(길게 누르기): 그림·이름·사이드바 폴더"><span class="fm-fav-ic">${icon('star')}</span><h3>즐겨찾기</h3><span>${pins.length + stars.length}</span>
     <button data-fav-fold aria-expanded="${!fav.fold}">${fav.fold ? '펼치기' : '접기'}</button>${more}</div>`;
   if (!fav.fold) {
     if (pins.length) html += `<div class="fm-folders">${pins.map(folderTileHtml).join('')}</div>`;
@@ -2148,6 +2452,27 @@ const FAV_CSS = `
 .fm-fav-sort button{font-size:12px;padding:5px 9px;border-radius:7px;color:var(--muted);white-space:nowrap}
 .fm-fav-sort button.on{background:var(--accent-bg);color:var(--text);font-weight:650}
 .fm-meta .fm-fav-where{color:var(--faint)}
+.fm-fav-bar{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.fm-fav-bar.on{border-color:#f5c54266}
+.fm-fav-bar .fm-thumb{flex:none}
+.fm-fav-bar-thumb{flex:none;border-radius:10px;padding:0}
+.fm-fav-bar-thumb:hover .fm-thumb,.fm-fav-bar-thumb:focus-visible .fm-thumb{outline:2px solid var(--accent);outline-offset:2px}
+.fm-fav-bar-text{flex:1;min-width:0;display:grid;gap:3px}
+.fm-fav-bar-text b{font-size:13px}
+.fm-fav-bar-text small{font-size:11.5px;color:var(--muted);line-height:1.5}
+.fm-fav-bar-acts{display:flex;align-items:center;gap:6px;flex:none}
+.fm-switch{position:relative;width:44px;height:26px;border-radius:13px;background:var(--surface-2);border:1px solid var(--line-2);flex:none;transition:background-color .15s,border-color .15s}
+.fm-switch i{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .15s,background-color .15s}
+.fm-switch.on{background:var(--accent);border-color:var(--accent)}
+.fm-switch.on i{transform:translateX(18px);background:#fff}
+.fm-switch:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+.fm-switch:disabled{opacity:.5}
+@media (prefers-reduced-motion:reduce){.fm-switch,.fm-switch i{transition:none}}
+.fm-set-row{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
+.fm-set-row div{flex:1;min-width:0}
+.fm-set-row b{display:block;font-size:13px}
+.fm-set-row small{display:block;font-size:11.5px;color:var(--muted);line-height:1.5}
+@media (max-width:560px){.fm-fav-bar{flex-wrap:wrap}.fm-fav-bar-acts{width:100%;justify-content:flex-end}}
 @media (max-width:560px){.fm-fav-sort button{padding:5px 7px}}
 `;
 
@@ -2353,6 +2678,7 @@ function renderMain(keepScroll) {
   } else {
     const inRoot = ui.view === ROOT;
     const stars = ui.view === VIEW_STARS;
+    if (stars && !ui.reorder) html += favShortcutBarHtml();
     const ids = stars ? favStarIds() : inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
     if (ui.query) {
       const unread = ids.filter((id) => !roster.resolved(id)).length;
@@ -3008,6 +3334,7 @@ function startLoadAllIfWanted() {
 async function openSettings() {
   const originalTheme=plus.theme;
   let loadAll = !!ui.loadAll;
+  let sidebarFav = fav.folder.on;
   const official = roster.mode === 'full';
   const result = await openModal(
     `<h3 id="fm-dialog-title">설정</h3>
@@ -3018,6 +3345,8 @@ async function openSettings() {
        <button class="fm-option" data-load="all">열 때 모두 한 번에<small>검색·점검이 바로 됨</small></button>
      </div>
      <p class="fm-note" data-load-note></p>
+     <span class="fm-label">즐겨찾기</span>
+     <div class="fm-set-row"><div><b>사이드바 즐겨찾기 폴더</b><small>RisuAI 사이드바 맨 위에 즐겨찾는 봇의 바로가기 폴더를 둡니다. 봇은 복사되지 않습니다.</small></div>${favSwitchHtml(sidebarFav, 'data-sidefav', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
      <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>저장</button></div>`,
     (modal, close) => {
       const sync = () => {
@@ -3031,13 +3360,16 @@ async function openSettings() {
       };
       modal.querySelectorAll('[data-theme]').forEach(b=>{b.onclick=()=>{plusApplyTheme(b.dataset.theme);modal.querySelectorAll('[data-theme]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})}});
       modal.querySelectorAll('[data-load]').forEach((b) => { b.onclick = () => { loadAll = b.dataset.load === 'all'; sync(); }; });
+      const sw = modal.querySelector('[data-sidefav]');
+      sw.onclick = () => { sidebarFav = !sidebarFav; sw.classList.toggle('on', sidebarFav); sw.setAttribute('aria-checked', String(sidebarFav)); };
       modal.querySelector('[data-x]').onclick = () => close(null);
-      modal.querySelector('[data-ok]').onclick = () => close({ loadAll });
+      modal.querySelector('[data-ok]').onclick = () => close({ loadAll, sidebarFav });
       sync();
     },
   );
   if (!result) {plusApplyTheme(originalTheme);return;}
   await plusPersist();
+  if (result.sidebarFav !== fav.folder.on) await shortcutToggle(result.sidebarFav);
   const turnedOn = result.loadAll && !ui.loadAll;
   ui.loadAll = result.loadAll;
   savePrefs();
@@ -3062,7 +3394,7 @@ async function locateInSidebar(target) {
     try { doc = await Risuai.getRootDocument(); } catch { doc = null; }
     if (!doc) { toast('메인 화면 접근 권한이 있어야 사이드바에서 찾을 수 있습니다', { error: true }); return; }
     toast('위치 확인 중…', { ms: 30000 });
-    const order = await readOrder();
+    const order = await readRawOrder(); // 사이드바와 칸을 맞추므로 바로가기 폴더까지 그대로
     const folder = target.folder ? order.find((f) => isFolder(f) && f.id === target.folder) : null;
     rootDoc = doc;
     // 먼저 이미 아는 것만으로 맞춰 본다(모르는 봇은 있다고 본다). 칸 수가 안 맞을 때만 그 목록의 모르는 봇을 확인한다.
@@ -3077,7 +3409,7 @@ async function locateInSidebar(target) {
     }
     if (session !== ui.session) return; // 그 사이 창을 닫았다
     // 찾는 동안 다른 곳에서 순서가 바뀌었으면 엉뚱한 칸일 수 있으니 멈춘다.
-    if (!found.error && JSON.stringify(await readOrder()) !== JSON.stringify(order)) found = { error: '찾는 동안 목록이 바뀌었습니다. 다시 해 주세요' };
+    if (!found.error && JSON.stringify(await readRawOrder()) !== JSON.stringify(order)) found = { error: '찾는 동안 목록이 바뀌었습니다. 다시 해 주세요' };
     document.querySelector('.fm-toast')?.remove();
     if (found.error) { toast(found.error, { error: true, ms: 5000 }); return; }
     if (found.folderClosed) {
@@ -3148,14 +3480,16 @@ function onFolderMenuOutside(e) { if (!e.target.closest?.('.fm-ctx')) closeFolde
 function onFolderMenuKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeFolderMenu(); } }
 
 function openFolderMenu(fid, x, y) {
-  const f = folderById(fid);
+  const fav = fid === VIEW_STARS;
+  const f = fav ? { id: VIEW_STARS, name: favFolderTitle() } : folderById(fid);
   if (!f || ui.reorder || document.querySelector('.fm-modal-back')) return;
   closeFolderMenu();
   ui.menuAt = Date.now();
   const el = document.createElement('div');
   el.className = 'fm-ctx';
   el.setAttribute('role', 'menu');
-  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + FOLDER_ITEMS.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' ? ' class="danger"' : ''}>${icon(i)}${folderItemLabel(a, t, f.id)}</button>`).join('');
+  const items = fav ? favMenuItems() : FOLDER_ITEMS;
+  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' ? ' class="danger"' : ''}>${icon(i)}${fav ? t : folderItemLabel(a, t, f.id)}</button>`).join('');
   document.body.append(el);
   const w = el.offsetWidth;
   const h = el.offsetHeight;
@@ -3165,7 +3499,7 @@ function openFolderMenu(fid, x, y) {
     const b = e.target.closest('[data-a]');
     if (!b) return;
     closeFolderMenu();
-    runFolderAction(b.dataset.a, fid);
+    if (fav) runFavMenuAction(b.dataset.a); else runFolderAction(b.dataset.a, fid);
   });
   document.addEventListener('pointerdown', onFolderMenuOutside, true);
   document.addEventListener('keydown', onFolderMenuKey, true);
@@ -3173,8 +3507,9 @@ function openFolderMenu(fid, x, y) {
 }
 
 function folderOf(target) {
-  const el = target.closest?.('.fm-ftile[data-folder], .fm-rail .fm-nav[data-view]');
+  const el = target.closest?.('.fm-ftile[data-folder], .fm-rail .fm-nav[data-view], [data-fav-menu]');
   if (!el) return null;
+  if (el.hasAttribute('data-fav-menu') || el.dataset.view === VIEW_STARS) return VIEW_STARS;
   const fid = el.dataset.folder || el.dataset.view;
   return folderById(fid) ? fid : null;
 }
@@ -3240,6 +3575,9 @@ const ACTIONS = {
   unfold: () => unfoldFolder(),
   'fav-view': () => openView(VIEW_STARS),
   'fav-selected': () => favToggleSelected(),
+  'fav-folder-toggle': () => favFolderToggle(),
+  'fav-folder-rename': () => shortcutRename(),
+  'fav-folder-image': () => shortcutImage(),
 };
 
 function bindEvents(root) {
@@ -3340,6 +3678,10 @@ async function openManager() {
   try {
     await loadPrefs();
     ui.order = await readOrder();
+    // 사이드바 즐겨찾기 폴더: 사이드바에서 고친 것·다른 기기 변경을 맞추고(꺼져 있는데 남아 있으면 지운다) 감시를 시작한다.
+    try { if (await saver.syncShortcut() === 'written') ui.order = await readOrder(); } catch (err) { console.log('[risu-folder-master] 즐겨찾기 폴더 맞추기 실패: ' + errorText(err)); }
+    shortcutPollStart();
+    if (fav.folder.on) shortcutGuard();
     roster.onUpdate = onRosterUpdate;
     ui.grid = await loadGrid();
     ui.selected.clear();
@@ -3687,15 +4029,19 @@ async function main() {
   } catch (err) { console.log('[risu-folder-master] 메뉴 버튼 등록 실패: ' + errorText(err)); }
   try {
     await Risuai.onUnload(async () => {
+      // 호스트가 1초만 기다리므로 즐겨찾기 폴더 정리를 가장 먼저 한다.
+      try { await shortcutUnloadCleanup(); } catch {}
       endDrag();
       rosterStop();
       avatars.clear();
       ui.cancelSearch?.();
       await removeGridStyle();
       await clearSidebarMark(rootDoc);
+      if (rootDoc) { try { await setRootStyle(rootDoc, SHORTCUT_GUARD_XID, ''); } catch {} }
     });
   } catch {}
   await startSidebarGrid();
+  try { await shortcutStartup(); } catch {}
   console.log(`[risu-folder-master] v${FM_VERSION} 준비됨`);
 }
 

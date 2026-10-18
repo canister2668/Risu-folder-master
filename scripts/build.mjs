@@ -10,6 +10,7 @@ const UPDATE_URL = 'https://raw.githubusercontent.com/canister2668/Risu-folder-m
 export const SOURCES = [
   'src/core/util.js',
   'src/core/order.js',
+  'src/core/shortcut.js',
   'src/core/store.js',
   'src/core/roster.js',
   'src/sidebar/grid.js',

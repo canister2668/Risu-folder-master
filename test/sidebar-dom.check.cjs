@@ -2,7 +2,7 @@
 // 클래스 조합은 각 판의 Sidebar.svelte 를 옮겨 왔다(공식판은 스크롤 칸에 rs-sidebar-scroll 이 없다).
 const { chromium } = require('/volume2/risu/build/nai-studio/work/update-v5.3.1/browser/node_modules/playwright');
 const fs = require('fs'); const path = require('path');
-const src = ['src/core/util.js', 'src/core/order.js', 'src/sidebar/grid.js', 'src/sidebar/locate.js'].map((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
+const src = ['src/core/util.js', 'src/core/order.js', 'src/sidebar/grid.js', 'src/sidebar/locate.js', 'src/ui/favorites.js'].map((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
 const results = []; const ok = (c, m, x) => { results.push(!!c); console.log((c ? 'PASS ' : 'FAIL ') + m + (x !== undefined ? ' :: ' + JSON.stringify(x) : '')); };
 
 // SafeElement 흉내: 모든 메서드 비동기, querySelectorAll·getChildren 은 length()/at() 배열.
@@ -37,6 +37,16 @@ const order = [{ id: 'F1', name: 'F1', data: ['a', 'b', 'c'] }, 'r1', { id: 'F2'
       await p.setContent(`<!doctype html><html><head></head><body>${fixture(kind, openF1)}</body></html>`);
       await p.addScriptTag({ content: adapter }); await p.addScriptTag({ content: src });
       const tag = `${kind}${openF1 ? ' (F1 open)' : ''}`;
+      // 즐겨찾기 바로가기 폴더 끌기 막기(맨 위 폴더 = F1 자리): 맨 위 폴더와 그 안만, 다른 칸은 그대로.
+      const guard = await p.evaluate(async () => {
+        const doc = await Risuai.getRootDocument();
+        await setRootStyle(doc, 'g', shortcutGuardCSS());
+        const drag = (el) => getComputedStyle(el)['-webkit-user-drag'] || getComputedStyle(el).webkitUserDrag;
+        const q = (l) => document.querySelector(`[data-label="${l}"]`);
+        const inner = document.querySelector('.rounded-lg.relative .h-4');
+        return { F1: drag(q('F1')), r1: drag(q('r1')), F2: drag(q('F2')), a: q('a') ? drag(q('a')) : null, spacer: inner ? getComputedStyle(inner).pointerEvents : null };
+      });
+      ok(guard.F1 === 'none' && guard.r1 !== 'none' && guard.F2 !== 'none' && (guard.a === null || (guard.a === 'none' && guard.spacer === 'none')), `${tag}: favorites guard blocks only the top folder`, guard);
       const r1 = await p.evaluate(async (o) => { const doc = await Risuai.getRootDocument(); const f = await findSidebarTarget(doc, o, { id: 'r1', folder: null }, () => true); return f.error || f.el.__el.dataset.label; }, order);
       ok(r1 === 'r1', `${tag}: loose bot found`, r1);
       const fb = await p.evaluate(async (o) => { const doc = await Risuai.getRootDocument(); const f = await findSidebarTarget(doc, o, { id: 'b', folder: 'F1' }, () => true); return f.error || { label: f.el.__el.dataset.label, closed: f.folderClosed, k: f.childIndex }; }, order);
