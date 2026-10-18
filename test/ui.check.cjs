@@ -45,7 +45,7 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   ok(await p.textContent('.fm-count') === '3개 선택', 'shift range select', await p.textContent('.fm-count'));
   await shot(p, 'desktop-selected');
   await p.click('[data-act="move"]'); await p.waitForSelector('.fm-picker'); await shot(p, 'desktop-picker');
-  await p.click('[data-pick="f-abydos"]'); await p.waitForTimeout(500);
+  await p.click('[data-pick="f-abydos"]'); await p.click('[data-confirm-move]'); await p.waitForTimeout(500);
   ok((await order(p))[1] === '아비도스 대책위원회[c15,c16,c17,c18,c19,c10,c11,c12]', 'moved into folder', (await order(p))[1]);
   ok(await p.isVisible('.fm-toast button'), 'undo toast shown');
   await p.click('.fm-toast button'); await p.waitForTimeout(500);
@@ -262,7 +262,7 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   await p.tap('.fm-nav[data-folder="f-th"]'); await p.waitForTimeout(300); await shot(p, 'mobile-folder');
   ok(await p.isVisible('[data-act="folder-more"]') && await p.isHidden('[data-act="rename"]'), 'mobile folder tools collapse into 더보기');
   await p.tap('[data-act="folder-more"]'); await p.waitForTimeout(200); await shot(p, 'mobile-more');
-  ok(await p.evaluate(() => document.querySelectorAll('.fm-sheet .fm-btn').length === 6), 'more sheet lists labelled tools');
+  ok(await p.evaluate(() => document.querySelectorAll('.fm-sheet .fm-btn').length === 7 && [...document.querySelectorAll('.fm-sheet .fm-btn')].some(b => b.textContent.includes('빠른 접근'))), 'more sheet lists labelled tools');
   await p.tap('.fm-modal [data-x]'); await p.waitForTimeout(200);
   // 길게 눌러 끌기(터치)
   await p.tap('[data-act="reorder"]'); await p.waitForTimeout(200);

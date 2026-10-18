@@ -1,6 +1,6 @@
 {
   "name": "risu-folder-master",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "license": "GPL-3.0-only",
   "author": "Canister",
@@ -9,7 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node scripts/build.mjs && node --test test/*.test.mjs",
-    "ui": "node scripts/build.mjs && node test/ui.check.cjs && node test/sidebar-dom.check.cjs && node test/sidebar-decoration.check.cjs && node test/picker.check.cjs && node test/folder.check.cjs",
+    "ui": "node scripts/build.mjs && node test/ui.check.cjs && node test/sidebar-dom.check.cjs && node test/sidebar-decoration.check.cjs && node test/picker.check.cjs && node test/folder.check.cjs && node test/extras.check.cjs",
     "release": "node scripts/build.mjs --release && node scripts/check-release.mjs"
   }
 }

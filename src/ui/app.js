@@ -2,6 +2,7 @@
 
 const ROOT = '__root__';
 const VIEW_ALL = '__all__';
+const VIEW_STARS = '__favorites__';
 const PREFS_KEY = 'risuFolderMaster.ui';
 
 const ui = {
@@ -133,6 +134,8 @@ function backButton(thumb) {
 }
 
 function headHtml(model) {
+  if(ui.view===VIEW_STARS)return `<span class="fm-thumb plain">${icon('star')}</span><div class="fm-head-text"><h2>즐겨찾는 봇</h2><p>${plusStarIds().length}개 · 원래 폴더 위치를 유지합니다</p></div><div class="fm-head-actions"><button class="fm-btn" data-act="select-all">${icon('select')}전체 선택</button></div>`;
+
   const all = model.folders.reduce((n, f) => n + f.data.length, 0) + model.root.length;
   const scope = ui.query ? '검색 결과 전체' : ui.view === ROOT ? '폴더 밖 전체' : '이 폴더 전체';
   const selectAll = `<button class="fm-btn" data-act="select-all">${icon('select')}<span class="fm-text">${scope}</span></button>`;
@@ -162,7 +165,7 @@ function headHtml(model) {
 
 function renderMain(keepScroll) {
   const model = currentModel();
-  if (ui.view !== VIEW_ALL && ui.view !== ROOT && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
+  if (ui.view !== VIEW_ALL && ui.view !== ROOT && ui.view !== VIEW_STARS && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
   ui.visible = [];
   const head = ui.app.querySelector('.fm-head');
   head.innerHTML = headHtml(model);
@@ -191,7 +194,7 @@ function renderMain(keepScroll) {
     if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더나 봇이 없습니다</div>`;
   } else {
     const inRoot = ui.view === ROOT;
-    const ids = inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
+    const ids = ui.view===VIEW_STARS ? plusStarIds() : inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
     if (ui.query) {
       const unread = ids.filter((id) => !roster.resolved(id)).length;
       html += `<p class="fm-note">${inRoot ? '폴더 밖' : '이 폴더'}에서 "${esc(ui.query)}" 검색${unread ? ` · 이름 미확인 ${unread}개 제외` : ''}</p>`;
@@ -253,6 +256,7 @@ function render(keepScroll = false) {
 // 지금 화면(폴더·폴더 밖)에 속한 봇. 모든 폴더 화면은 null.
 function viewIds() {
   if (ui.view === VIEW_ALL) return null;
+  if (ui.view === VIEW_STARS) return new Set(plusStarIds());
   const m = currentModel();
   return new Set(ui.view === ROOT ? m.root : (m.folders.find((f) => f.id === ui.view)?.data || []));
 }
@@ -806,7 +810,8 @@ function shellHtml() {
           <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
           <button data-act="check">${icon('scan')}정리 점검</button>
           <button data-act="reload">${icon('refresh')}새로 불러오기</button>
-          <button data-act="settings">${icon('gear')}설정</button>
+          <button data-act="plus-stars">${icon('star')}즐겨찾는 봇</button>
+          <button data-act="settings">${icon('gear')}설정 · 테마</button>
         </div>
       </div>
       <button class="fm-btn fm-icon" data-act="close" title="닫기" aria-label="닫기">${icon('close')}</button>
@@ -823,6 +828,7 @@ function shellHtml() {
           <button class="fm-btn primary fm-norm" data-act="move">${icon('folder')}폴더로 옮기기</button>
           <button class="fm-btn fm-norm" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
           <button class="fm-btn fm-norm" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
+          <button class="fm-btn fm-icon fm-norm" data-act="plus-toggle-stars" title="선택한 봇 즐겨찾기 추가 / 해제" aria-label="선택한 봇 즐겨찾기 추가 / 해제">${icon('star')}</button>
           <button class="fm-btn ghost fm-icon fm-norm" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
         </div>
       </main>
@@ -838,10 +844,12 @@ function startLoadAllIfWanted() {
 }
 
 async function openSettings() {
+  const originalTheme=plus.theme;
   let loadAll = !!ui.loadAll;
   const official = roster.mode === 'full';
   const result = await openModal(
     `<h3 id="fm-dialog-title">설정</h3>
+     ${plusThemesHtml()}
      <span class="fm-label">봇 정보 불러오기</span>
      <div class="fm-options cols2">
        <button class="fm-option" data-load="lazy">보이는 봇만<small>가볍게 · 기본</small></button>
@@ -859,17 +867,19 @@ async function openSettings() {
             ? '창을 열 때마다 모든 봇을 3개씩 차례로 읽습니다. 해적 RisuAI는 봇 하나를 읽을 때 그 채팅까지 받으므로, 봇이 많으면 오래 걸리고 서버에 부담이 됩니다. 이 기기에만 적용됩니다.'
             : '화면에 보이는 봇만 읽고, 읽은 이름은 이 기기에 저장해 다음에 바로 보여 줍니다. 이 기기에만 적용됩니다.';
       };
+      modal.querySelectorAll('[data-theme]').forEach(b=>{b.onclick=()=>{plusApplyTheme(b.dataset.theme);modal.querySelectorAll('[data-theme]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})}});
       modal.querySelectorAll('[data-load]').forEach((b) => { b.onclick = () => { loadAll = b.dataset.load === 'all'; sync(); }; });
       modal.querySelector('[data-x]').onclick = () => close(null);
       modal.querySelector('[data-ok]').onclick = () => close({ loadAll });
       sync();
     },
   );
-  if (!result) return;
+  if (!result) {plusApplyTheme(originalTheme);return;}
+  await plusPersist();
   const turnedOn = result.loadAll && !ui.loadAll;
   ui.loadAll = result.loadAll;
   savePrefs();
-  toast(ui.loadAll ? '열 때 모든 봇을 읽습니다' : '보이는 봇만 읽습니다');
+  toast('테마와 설정을 저장했습니다');
   if (turnedOn) startLoadAllIfWanted();
   else if (!ui.loadAll) rosterCancelQueue(); // 뒤에서 읽던 것은 멈추고, 보이는 봇은 다시 요청된다
   if (!ui.loadAll) renderMain(true);
@@ -1162,7 +1172,7 @@ async function openManager() {
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
-    document.body.innerHTML = `<style>${APP_CSS}</style>${shellHtml()}`;
+    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);
     bindEvents(document.querySelector('.fm-root'));

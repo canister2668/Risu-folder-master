@@ -21,6 +21,7 @@ export const SOURCES = [
   'src/ui/iconpicker.js',
   'src/ui/app.js',
   'src/ui/drag.js',
+  'src/ui/extras.js',
   'src/main.js',
 ];
 

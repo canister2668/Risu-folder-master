@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.2
+//@display-name 📁 Risu 폴더 마스터 v1.0.3
 //@api 3.0
-//@version 1.0.2
+//@version 1.0.3
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.2 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.0.3 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.2";
+const FM_VERSION = "1.0.3";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -1979,6 +1979,7 @@ function openImagePicker(folder) {
 
 const ROOT = '__root__';
 const VIEW_ALL = '__all__';
+const VIEW_STARS = '__favorites__';
 const PREFS_KEY = 'risuFolderMaster.ui';
 
 const ui = {
@@ -2110,6 +2111,8 @@ function backButton(thumb) {
 }
 
 function headHtml(model) {
+  if(ui.view===VIEW_STARS)return `<span class="fm-thumb plain">${icon('star')}</span><div class="fm-head-text"><h2>즐겨찾는 봇</h2><p>${plusStarIds().length}개 · 원래 폴더 위치를 유지합니다</p></div><div class="fm-head-actions"><button class="fm-btn" data-act="select-all">${icon('select')}전체 선택</button></div>`;
+
   const all = model.folders.reduce((n, f) => n + f.data.length, 0) + model.root.length;
   const scope = ui.query ? '검색 결과 전체' : ui.view === ROOT ? '폴더 밖 전체' : '이 폴더 전체';
   const selectAll = `<button class="fm-btn" data-act="select-all">${icon('select')}<span class="fm-text">${scope}</span></button>`;
@@ -2139,7 +2142,7 @@ function headHtml(model) {
 
 function renderMain(keepScroll) {
   const model = currentModel();
-  if (ui.view !== VIEW_ALL && ui.view !== ROOT && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
+  if (ui.view !== VIEW_ALL && ui.view !== ROOT && ui.view !== VIEW_STARS && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
   ui.visible = [];
   const head = ui.app.querySelector('.fm-head');
   head.innerHTML = headHtml(model);
@@ -2168,7 +2171,7 @@ function renderMain(keepScroll) {
     if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더나 봇이 없습니다</div>`;
   } else {
     const inRoot = ui.view === ROOT;
-    const ids = inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
+    const ids = ui.view===VIEW_STARS ? plusStarIds() : inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
     if (ui.query) {
       const unread = ids.filter((id) => !roster.resolved(id)).length;
       html += `<p class="fm-note">${inRoot ? '폴더 밖' : '이 폴더'}에서 "${esc(ui.query)}" 검색${unread ? ` · 이름 미확인 ${unread}개 제외` : ''}</p>`;
@@ -2230,6 +2233,7 @@ function render(keepScroll = false) {
 // 지금 화면(폴더·폴더 밖)에 속한 봇. 모든 폴더 화면은 null.
 function viewIds() {
   if (ui.view === VIEW_ALL) return null;
+  if (ui.view === VIEW_STARS) return new Set(plusStarIds());
   const m = currentModel();
   return new Set(ui.view === ROOT ? m.root : (m.folders.find((f) => f.id === ui.view)?.data || []));
 }
@@ -2783,7 +2787,8 @@ function shellHtml() {
           <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
           <button data-act="check">${icon('scan')}정리 점검</button>
           <button data-act="reload">${icon('refresh')}새로 불러오기</button>
-          <button data-act="settings">${icon('gear')}설정</button>
+          <button data-act="plus-stars">${icon('star')}즐겨찾는 봇</button>
+          <button data-act="settings">${icon('gear')}설정 · 테마</button>
         </div>
       </div>
       <button class="fm-btn fm-icon" data-act="close" title="닫기" aria-label="닫기">${icon('close')}</button>
@@ -2800,6 +2805,7 @@ function shellHtml() {
           <button class="fm-btn primary fm-norm" data-act="move">${icon('folder')}폴더로 옮기기</button>
           <button class="fm-btn fm-norm" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
           <button class="fm-btn fm-norm" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
+          <button class="fm-btn fm-icon fm-norm" data-act="plus-toggle-stars" title="선택한 봇 즐겨찾기 추가 / 해제" aria-label="선택한 봇 즐겨찾기 추가 / 해제">${icon('star')}</button>
           <button class="fm-btn ghost fm-icon fm-norm" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
         </div>
       </main>
@@ -2815,10 +2821,12 @@ function startLoadAllIfWanted() {
 }
 
 async function openSettings() {
+  const originalTheme=plus.theme;
   let loadAll = !!ui.loadAll;
   const official = roster.mode === 'full';
   const result = await openModal(
     `<h3 id="fm-dialog-title">설정</h3>
+     ${plusThemesHtml()}
      <span class="fm-label">봇 정보 불러오기</span>
      <div class="fm-options cols2">
        <button class="fm-option" data-load="lazy">보이는 봇만<small>가볍게 · 기본</small></button>
@@ -2836,17 +2844,19 @@ async function openSettings() {
             ? '창을 열 때마다 모든 봇을 3개씩 차례로 읽습니다. 해적 RisuAI는 봇 하나를 읽을 때 그 채팅까지 받으므로, 봇이 많으면 오래 걸리고 서버에 부담이 됩니다. 이 기기에만 적용됩니다.'
             : '화면에 보이는 봇만 읽고, 읽은 이름은 이 기기에 저장해 다음에 바로 보여 줍니다. 이 기기에만 적용됩니다.';
       };
+      modal.querySelectorAll('[data-theme]').forEach(b=>{b.onclick=()=>{plusApplyTheme(b.dataset.theme);modal.querySelectorAll('[data-theme]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})}});
       modal.querySelectorAll('[data-load]').forEach((b) => { b.onclick = () => { loadAll = b.dataset.load === 'all'; sync(); }; });
       modal.querySelector('[data-x]').onclick = () => close(null);
       modal.querySelector('[data-ok]').onclick = () => close({ loadAll });
       sync();
     },
   );
-  if (!result) return;
+  if (!result) {plusApplyTheme(originalTheme);return;}
+  await plusPersist();
   const turnedOn = result.loadAll && !ui.loadAll;
   ui.loadAll = result.loadAll;
   savePrefs();
-  toast(ui.loadAll ? '열 때 모든 봇을 읽습니다' : '보이는 봇만 읽습니다');
+  toast('테마와 설정을 저장했습니다');
   if (turnedOn) startLoadAllIfWanted();
   else if (!ui.loadAll) rosterCancelQueue(); // 뒤에서 읽던 것은 멈추고, 보이는 봇은 다시 요청된다
   if (!ui.loadAll) renderMain(true);
@@ -3139,7 +3149,7 @@ async function openManager() {
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
-    document.body.innerHTML = `<style>${APP_CSS}</style>${shellHtml()}`;
+    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);
     bindEvents(document.querySelector('.fm-root'));
@@ -3428,6 +3438,59 @@ function bindDrag(root) {
   window.addEventListener('contextmenu', (e) => { if (ui.reorder && (drag.pending || drag.active)) e.preventDefault(); });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drag.active) endDrag(false); });
 }
+
+// ── src/ui/extras.js ──
+// Optional themes and shortcuts preserve the original home geometry and ordering.
+const PLUS_KEY='risuFolderMaster.extras';
+const plus={theme:'classic',pins:new Set(),stars:new Set()};
+const PLUS_THEMES={classic:{label:'기존 다크',swatch:'#6c7cff',bg:'#0f1218'},mint:{label:'민트 라이트',swatch:'#006c60',bg:'#f6f7f4'},blue:{label:'블루 라이트',swatch:'#235da2',bg:'#f3f6fa'},ocean:{label:'오션 다크',swatch:'#80e3c5',bg:'#111e24'}};
+ICON_PATHS.star='<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>';
+const FEATURE_CSS=`
+:root[data-fm-theme=mint]{color-scheme:light;--bg:#f6f7f4;--panel:#eff2ef;--surface:#fff;--surface-2:#e7eeea;--line:#cfdad4;--line-2:#9bafa5;--text:#152f33;--muted:#596b6c;--faint:#62736d;--accent:#006c60;--accent-2:#00584e;--accent-bg:#dcefe8;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
+:root[data-fm-theme=blue]{color-scheme:light;--bg:#f3f6fa;--panel:#eaf0f7;--surface:#fff;--surface-2:#e1eaf4;--line:#ccd8e5;--line-2:#92abc5;--text:#192e47;--muted:#51657c;--faint:#5b6e82;--accent:#235da2;--accent-2:#184c8b;--accent-bg:#dfebfd;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
+:root[data-fm-theme=ocean]{color-scheme:dark;--bg:#111e24;--panel:#13232a;--surface:#182a31;--surface-2:#243c43;--line:#354c53;--line-2:#607d85;--text:#f0f6f5;--muted:#b1c3c6;--faint:#9bb4b9;--accent:#80e3c5;--accent-2:#a7efda;--accent-bg:#204b40;--danger:#ff8e9a;--ok:#80e3c5;--button-text:#102a24}
+:root[data-fm-theme=classic]{--button-text:#fff}
+:root:not([data-fm-theme=classic]) .fm-nav{color:var(--text)}
+:root:not([data-fm-theme=classic]) .fm-nav.on,:root:not([data-fm-theme=classic]) .fm-banner b{color:var(--text)}
+:root:not([data-fm-theme=classic]) .fm-logo{background:var(--accent);color:var(--button-text)}
+:root:not([data-fm-theme=classic]) .fm-option,:root:not([data-fm-theme=classic]) .fm-option.on,:root:not([data-fm-theme=classic]) .fm-ip-chips button.on{color:var(--text)}
+:root:not([data-fm-theme=classic]) .fm-note,:root:not([data-fm-theme=classic]) .fm-toast,:root:not([data-fm-theme=classic]) .fm-banner{background:var(--surface-2);color:var(--text);border-color:var(--line-2)}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-warn,:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-loading.warn,:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-card.failed .fm-name{color:#8a4b08}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-btn.danger{background:#ffedef;border-color:#d5a1aa;color:#a01e34}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-ctx button.danger{color:#a01e34}
+:root:not([data-fm-theme=classic]) .fm-fcount{background:var(--surface-2);color:var(--text)}
+:root:not([data-fm-theme=classic]) .fm-btn.primary,:root:not([data-fm-theme=classic]) .fm-card.sel .fm-tick,:root:not([data-fm-theme=classic]) .fm-back-arrow{color:var(--button-text)}
+:root:not([data-fm-theme=classic]) .fm-btn.primary:hover:not(:disabled){background:var(--accent-2);border-color:var(--accent-2)}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-root{background:#d6dfdae8}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-app{box-shadow:0 18px 55px #28483933}
+.fm-plus-themes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 18px}
+.fm-plus-theme{padding:10px 6px;border:1px solid var(--line-2);border-radius:9px;text-align:left;background:var(--surface);font-size:11px;color:var(--text)}
+.fm-plus-theme.on{border:2px solid var(--accent);padding:9px 5px;background:var(--accent-bg)}
+.fm-plus-swatch{display:block;height:34px;border-radius:5px;margin-bottom:8px;background:var(--swatch-bg);border-left:13px solid var(--swatch);box-shadow:inset 0 0 0 1px #89999044}
+.fm-plus-pin{position:absolute;top:5px;left:6px;color:var(--accent-2)}.fm-plus-pin .fm-i{width:13px;height:13px;fill:currentColor}
+.fm-plus-starred{color:var(--accent-2);font-size:11px;margin-right:3px}
+.fm-plus-preview{border:1px solid var(--line-2);border-radius:10px;padding:13px;margin-top:12px;background:var(--surface);font-size:12px;line-height:1.7}
+.fm-plus-preview b{color:var(--accent-2)}.fm-pick.plus-target{background:var(--accent-bg);outline:1px solid var(--accent)}
+.fm-plus-label{color:var(--accent-2)}
+@media(max-width:700px){.fm-plus-themes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+`;
+function plusApplyTheme(theme){plus.theme=Object.hasOwn(PLUS_THEMES,theme)?theme:'classic';document.documentElement.dataset.fmTheme=plus.theme}
+async function plusPersist(){try{await ui.prefs?.setItem(PLUS_KEY,{theme:plus.theme,pins:[...plus.pins],stars:[...plus.stars]})}catch{toast('추가 옵션을 저장하지 못했습니다',{error:true})}}
+const plusLoadPrefs=loadPrefs;loadPrefs=async function(){await plusLoadPrefs();try{const s=await ui.prefs?.getItem(PLUS_KEY);plus.pins=new Set(Array.isArray(s?.pins)?s.pins:[]);plus.stars=new Set(Array.isArray(s?.stars)?s.stars:[]);plusApplyTheme(s?.theme||'classic')}catch{plusApplyTheme('classic')}};
+function plusThemesHtml(){return `<span class="fm-label">화면 테마</span><div class="fm-plus-themes" role="group" aria-label="화면 테마">${Object.entries(PLUS_THEMES).map(([id,t])=>`<button class="fm-plus-theme ${plus.theme===id?'on':''}" data-theme="${id}" aria-pressed="${plus.theme===id}"><span class="fm-plus-swatch" style="--swatch:${t.swatch};--swatch-bg:${t.bg}"></span>${t.label}</button>`).join('')}</div><p class="fm-note">선택해 미리 본 뒤 저장하세요. 취소하면 이전 테마로 돌아갑니다.</p>`}
+function plusTogglePin(fid){plus.pins.has(fid)?plus.pins.delete(fid):plus.pins.add(fid);plusPersist();render(true);toast(plus.pins.has(fid)?'왼쪽 빠른 접근에 고정했습니다':'폴더 고정을 해제했습니다')}
+function plusToggleStars(){const ids=[...ui.selected];if(!ids.length){toast('즐겨찾기에 넣을 봇을 먼저 선택하세요');return}const remove=ids.every(id=>plus.stars.has(id));ids.forEach(id=>remove?plus.stars.delete(id):plus.stars.add(id));plusPersist();render(true);toast(`${ids.length}개 봇 즐겨찾기 ${remove?'해제':'추가'}`)}
+function plusStarIds(){return orderBotIds(ui.order).filter(id=>plus.stars.has(id))}
+FOLDER_ITEMS.unshift(['plus-pin','star','빠른 접근 고정 / 해제']);
+const plusRunFolderAction=runFolderAction;runFolderAction=function(act,fid){if(act==='plus-pin')return plusTogglePin(fid);return plusRunFolderAction(act,fid)};
+const plusRail=renderRail;renderRail=function(){plusRail();const rail=ui.app.querySelector('.fm-rail');const star=document.createElement('button');star.className='fm-nav'+(ui.view===VIEW_STARS?' on':'');star.dataset.view=VIEW_STARS;star.innerHTML=`<span class="fm-thumb plain">${icon('star')}</span><span class="fm-nav-name">즐겨찾는 봇</span><span class="fm-nav-count">${plusStarIds().length}</span>`;const firstLabel=rail.querySelector('.fm-rail-label');rail.insertBefore(star,firstLabel);const pins=currentModel().folders.filter(f=>plus.pins.has(f.id));if(pins.length){const group=document.createElement('div');group.className='fm-plus-pins';group.innerHTML='<div class="fm-rail-label fm-plus-label">고정한 폴더</div>'+pins.map(f=>`<button class="fm-nav ${ui.view===f.id?'on':''}" data-view="${esc(f.id)}">${folderThumb(f)}<span class="fm-nav-name">${esc(f.name)}</span><span class="fm-nav-count">${f.data.length}</span></button>`).join('');rail.insertBefore(group,firstLabel)}};
+const plusTile=folderTileHtml;folderTileHtml=function(f){const html=plusTile(f);return plus.pins.has(f.id)?html.replace('</button>',`<span class="fm-plus-pin">${icon('star')}</span></button>`):html};
+const plusCard=cardHtml;cardHtml=function(id,container){let html=plusCard(id,container);return plus.stars.has(id)?html.replace('<div class="fm-name">','<div class="fm-name"><span class="fm-plus-starred" title="즐겨찾는 봇">★</span>'):html};
+ACTIONS['plus-stars']=()=>openView(VIEW_STARS);
+ACTIONS['plus-toggle-stars']=()=>plusToggleStars();
+const plusReorder=ACTIONS.reorder;ACTIONS.reorder=()=>{if(ui.view===VIEW_STARS)openView(VIEW_ALL);return plusReorder()};
+// Destination selection now previews the effect; the existing saver still performs the move.
+const plusPickFolder=pickFolder;pickFolder=function(title,{mode='move',ids=[]}={}){if(mode!=='move')return plusPickFolder(title,{mode,ids});const {folders}=currentModel();let target=null;return openModal(`<h3 id="fm-dialog-title">${esc(title)}</h3><label class="fm-search fm-pick-search">${icon('search')}<input type="search" placeholder="옮길 폴더 검색" aria-label="폴더 검색"></label><div class="fm-picker">${folders.map(f=>`<button class="fm-nav fm-pick" data-pick="${esc(f.id)}" data-name="${esc(f.name.toLowerCase())}" ${ids.every(id=>f.data.includes(id))?'disabled':''}>${folderThumb(f)}<span class="fm-nav-name">${esc(f.name)}</span><span class="fm-nav-count">${ids.every(id=>f.data.includes(id))?'현재 위치':f.data.length}</span></button>`).join('')}<div class="fm-empty fm-pick-none" hidden>맞는 폴더가 없습니다</div></div><div class="fm-plus-preview" aria-live="polite">폴더를 고르면 이동 전후 개수를 보여드립니다.</div><button class="fm-nav fm-pick-new" data-new><span class="fm-thumb plain">${icon('plus')}</span><span class="fm-nav-name">새 폴더 만들기</span></button><div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-confirm-move disabled>이동하기</button></div>`,(modal,close)=>{modal.querySelector('[data-x]').onclick=()=>close(null);modal.querySelector('[data-new]').onclick=()=>close('__new__');modal.querySelector('[data-confirm-move]').onclick=()=>target&&close(target);modal.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{target=b.dataset.pick;const f=folderById(target);const moving=ids.filter(id=>!f.data.includes(id)).length;modal.querySelectorAll('[data-pick]').forEach(x=>x.classList.toggle('plus-target',x===b));const sources=new Map();for(const id of ids){const from=folders.find(f=>f.data.includes(id))?.name||'폴더 밖';sources.set(from,(sources.get(from)||0)+1)}modal.querySelector('.fm-plus-preview').innerHTML=`<div>${[...sources].map(([n,c])=>`${esc(n)} ${c}개`).join(' · ')} → <b>${esc(f.name)}</b></div><div>${moving}개 이동 · <b>${f.data.length}개 → ${f.data.length+moving}개</b>${ids.length-moving?` · 이미 들어 있는 ${ids.length-moving}개 유지`:''}</div>`;const confirm=modal.querySelector('[data-confirm-move]');confirm.disabled=!moving;confirm.textContent=`${moving}개 이동하기`});const input=modal.querySelector('input');input.oninput=()=>{let n=0;modal.querySelectorAll('.fm-pick').forEach(b=>{b.hidden=!b.dataset.name.includes(input.value.trim().toLowerCase());if(!b.hidden)n++});modal.querySelector('.fm-pick-none').hidden=!!n};setTimeout(()=>input.focus(),0);modal.querySelectorAll('[data-src]').forEach(async el=>{const src=await avatars.load(el.dataset.src);if(src&&el.isConnected){const img=document.createElement('img');img.src=src;img.alt='';el.replaceChildren(img)}})})};
 
 // ── src/main.js ──
 // 시작: 메뉴 등록 + 사이드바 그리드 복원.
