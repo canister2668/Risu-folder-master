@@ -359,6 +359,7 @@ function plusNorm(v) {
   const r = o.recent && typeof o.recent === 'object' ? o.recent : {};
   const l = o.labelFolder && typeof o.labelFolder === 'object' ? o.labelFolder : {};
   const a = o.archive && typeof o.archive === 'object' ? o.archive : {};
+  const cl = o.cleanup && typeof o.cleanup === 'object' ? o.cleanup : {};
   const str = (x, n = 300) => (typeof x === 'string' ? x.slice(0, n) : '');
   return {
     recent: {
@@ -370,6 +371,7 @@ function plusNorm(v) {
       imgFile: str(r.imgFile),
     },
     labelFolder: { lid: str(l.lid, 40), name: str(l.name, 80), imgFile: str(l.imgFile) },
+    cleanup: { imgFile: str(cl.imgFile) },
     archive: {
       on: a.on !== false,
       days: [30, 60, 90].includes(a.days) ? a.days : 60,
@@ -380,7 +382,7 @@ function plusNorm(v) {
   };
 }
 
-// op = { k: 'recent'|'labelFolder'|'archive', set: {...} } | { k: 'dupIgnore', add: [...] }
+// op = { k: 'recent'|'labelFolder'|'archive'|'cleanup', set: {...} } | { k: 'dupIgnore', add: [...] }
 function plusApply(state, op) {
   const s = plusNorm(state);
   if (op.k === 'dupIgnore') s.dupIgnore = [...s.dupIgnore, ...(op.add || [])];

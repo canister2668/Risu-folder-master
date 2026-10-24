@@ -21,6 +21,7 @@ export const SOURCES = [
   'src/ui/styles.js',
   'src/ui/dialogs.js',
   'src/ui/templates-data.js',
+  'src/ui/defaulticons.js',
   'src/ui/iconpicker.js',
   'src/ui/favorites.js',
   'src/ui/sidebarplus.js',

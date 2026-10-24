@@ -131,6 +131,23 @@ const extra = () => [
     ok(arc && arc.data.join() === 'c30', 'older duplicate moved to new archive folder', arc);
     ok((await store(p, 'risuFolderMaster.plus'))?.archive?.folderId === arc?.id, 'archive folder remembered');
 
+    // ── ② 정리 폴더로 꺼내기 → 띠 → 끝내기
+    await menu(p, 'dups'); await p.waitForSelector('.fm-dupe');
+    ok(await p.locator('.fm-dupe-row [data-dup-pick][aria-checked="true"]').count() === 1, 'older duplicate pre-picked by toggle');
+    await p.click('.fm-dupe-row [data-dup-pick][aria-checked="false"]'); await p.waitForTimeout(150);
+    ok(/\(2\)/.test(await p.textContent('.fm-modal [data-dup-clean]')), 'clean button counts picked bots');
+    await p.click('.fm-dupe-row [data-dup-pick][aria-checked="true"] >> nth=1'); await p.waitForTimeout(150);
+    await p.click('.fm-modal [data-dup-clean]'); await p.waitForTimeout(900);
+    o = await order(p);
+    ok(o[0].id === 'risu-folder-master-cleanup' && o[0].data.length === 1, 'cleanup folder on top with picked bot', o[0]);
+    ok(!!o[0].imgFile, 'cleanup folder gets the built-in default icon', o[0].imgFile);
+    ok(await p.evaluate(() => window.__calls.includes('hide')), 'manager closes after pulling out');
+    await p.evaluate(() => window.__open()); await p.waitForSelector('.fm-clean-banner');
+    ok(/남은 봇 1개/.test(await p.textContent('.fm-clean-banner')), 'home banner shows cleanup in progress');
+    await p.click('.fm-clean-banner [data-act="cleanup-end"]'); await p.waitForTimeout(800);
+    ok(!(await order(p)).some((x) => x.id === 'risu-folder-master-cleanup'), 'cleanup end button removes the folder');
+    if (await p.locator('.fm-rail .fm-rail-fold[aria-expanded="false"]').count()) { await p.click('.fm-rail .fm-rail-fold'); await p.waitForTimeout(200); }
+
     // ── ⑤ 보관함 옮기기
     await home(p);
     await p.click('.fm-arch-banner [data-act="archive"]');
@@ -193,6 +210,7 @@ const extra = () => [
     await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(1200);
     o = await order(p);
     ok(o[0].id === 'risu-folder-master-recent' && o[0].data[0] === 'c12', 'recent folder on top with current bot first', o[0]);
+    ok(o[0].imgFile && (await store(p, 'risuFolderMaster.plus'))?.recent?.imgFile === o[0].imgFile, 'recent folder gets the built-in default icon', o[0].imgFile);
     await p.evaluate(() => { window.__curIdx = 13; });
     for (let i = 0; i < 40; i++) { o = await order(p); if (o[0]?.data?.[0] === 'c13') break; await p.waitForTimeout(250); }
     ok(o[0].data[0] === 'c13', 'switching bots updates recent folder', o[0].data.slice(0, 3));
@@ -214,6 +232,22 @@ const extra = () => [
     o = await order(p);
     ok(!o.some((x) => typeof x === 'object' && x.id.startsWith('risu-folder-master-')), 'turning off removes shortcut folders');
     await shot(p, 'settings-after');
+
+    // ── 다른 기기가 만든 정리 폴더: 만료 전엔 남기고, 만료되면 지운다
+    await p.evaluate(() => { window.__db.characterOrder = [{ id: 'risu-folder-master-cleanup', name: '🧹 정리 중', data: ['c1'], color: 'red', imgFile: '', fmUntil: Date.now() + 600000 }, ...window.__db.characterOrder]; });
+    await p.click('[data-act="close"]'); await p.waitForTimeout(300); await p.evaluate(() => window.__open()); await p.waitForTimeout(1200);
+    ok((await order(p))[0].id === 'risu-folder-master-cleanup', 'another device\'s live cleanup folder is kept');
+    await p.evaluate(() => { window.__db.characterOrder[0].fmUntil = Date.now() - 1000; });
+    await p.click('[data-act="close"]'); await p.waitForTimeout(300); await p.evaluate(() => window.__open()); await p.waitForTimeout(1200);
+    ok(!(await order(p)).some((x) => x.id === 'risu-folder-master-cleanup'), 'expired foreign cleanup folder is removed');
+
+    // ── 정리 폴더: 봇을 지우면(RisuAI 쪽 삭제) 저절로 사라진다 (데이터를 바꾸므로 마지막에)
+    await menu(p, 'dups'); await p.waitForSelector('.fm-dupe');
+    await p.click('.fm-modal [data-dup-clean]'); await p.waitForTimeout(900);
+    const gone = (await order(p))[0].data[0];
+    await p.evaluate((id) => { const db = window.__db; db.characters = db.characters.filter((c) => c.chaId !== id); db.characterOrder = db.characterOrder.map((x) => typeof x === 'object' ? { ...x, data: x.data.filter((d) => d !== id) } : x).filter((x) => x !== id && (typeof x !== 'object' || x.data.length)); }, gone);
+    for (let i = 0; i < 20 && (await order(p)).some((x) => x.id === 'risu-folder-master-cleanup'); i++) await p.waitForTimeout(250);
+    ok(!(await order(p)).some((x) => x.id === 'risu-folder-master-cleanup'), 'cleanup folder disappears when its bots are deleted');
 
     // ── 휴대폰
     const m = await boot({ width: 390, height: 800 });

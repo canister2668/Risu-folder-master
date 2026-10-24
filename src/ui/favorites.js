@@ -156,6 +156,7 @@ function shortcutPollStop() {
 async function shortcutStartup() {
   await favLoad();
   await shortcutReloadStores();
+  await cleanupResume();
   if (shortcutAnyOn()) await shortcutGuard();
   recentWatchStart();
 }
@@ -171,6 +172,8 @@ async function shortcutUnloadCleanup() {
   if (!db) return;
   const me = (Array.isArray(db.plugins) ? db.plugins : []).find((p) => p && p.name === PLUGIN_NAME);
   if (me && me.enabled !== false) return;
+  // 지우거나 끄는 경우: 정리 폴더 기록도 지운다(다시 켰을 때 없는 폴더를 지켜보지 않게).
+  try { await (await Risuai.getLocalPluginStorage()).setItem('risuFolderMaster.cleanup', null); } catch {}
   const raw = cloneOrder(db.characterOrder);
   if (!raw.some(isShortcut)) return;
   await Risuai.setDatabaseLite({ characterOrder: shortcutBase(raw, shortcutState.last) });

@@ -29,7 +29,14 @@ async function readOrder() {
 
 // base 를 저장할 모양(바로가기 폴더 포함)으로.
 function rawFor(base, raw) {
-  return keepShortcutImg(withShortcut(base, currentShortcutOpts()), raw);
+  const list = currentShortcutOpts() || [];
+  // 다른 기기가 만든 정리 폴더는 만료 전이면 그대로 둔다(이 기기는 정리 중인지 모른다).
+  if (Array.isArray(list) && !list.some((sc) => sc && sc.id === CLEANUP_ID)) {
+    const rc = (raw || []).find((x) => isShortcut(x) && x.id === CLEANUP_ID);
+    const endedHere = typeof cleanup === 'object' && cleanup.ended.has(Number(rc && rc.fmUntil));
+    if (rc && Number(rc.fmUntil) > Date.now() && !endedHere) list.unshift({ id: CLEANUP_ID, name: rc.name, color: rc.color, imgFile: rc.imgFile, ids: rc.data, until: rc.fmUntil });
+  }
+  return keepShortcutImg(withShortcut(base, list), raw);
 }
 
 // 화면에 필요한 가벼운 정보만 남긴다.

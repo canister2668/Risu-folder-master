@@ -34,7 +34,7 @@ async function boot(b, viewport) {
   ok(!(await p.$('.fm-ctx')), 'clicking outside closes the menu');
   await p.click('.fm-ftile[data-folder="f-th"]', { button: 'right' }); await p.waitForTimeout(150);
   await p.click('.fm-ctx [data-a="image"]'); await p.waitForSelector('.fm-ip');
-  ok(await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length) === 30, 'picker lists 30 templates', await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length));
+  ok(await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length) === 32, 'picker lists 32 templates', await p.evaluate(() => document.querySelectorAll('.fm-ip-tile').length));
   ok(!(await p.$('.fm-ip-sec')), 'no recommendation for an unrelated folder name');
   await p.click('.fm-ip-tile[data-tpl="fantasy"]'); await p.waitForTimeout(200);
   ok(await p.evaluate(() => !!document.querySelector('[data-new] img') && !document.querySelector('[data-apply]').disabled), 'choosing a template previews it and enables apply');

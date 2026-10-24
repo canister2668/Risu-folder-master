@@ -8,7 +8,10 @@ const SHORTCUT_NAME = '⭐ 즐겨찾기';
 const RECENT_ID = 'risu-folder-master-recent';
 const RECENT_NAME = '🕘 최근 대화';
 const LABEL_FOLDER_ID = 'risu-folder-master-label';
-const SHORTCUT_IDS = [SHORTCUT_ID, RECENT_ID, LABEL_FOLDER_ID];
+// 중복 봇 정리용 임시 폴더(사이드바에서 열었다 닫으면 사라진다).
+const CLEANUP_ID = 'risu-folder-master-cleanup';
+const CLEANUP_NAME = '🧹 정리 중';
+const SHORTCUT_IDS = [SHORTCUT_ID, RECENT_ID, LABEL_FOLDER_ID, CLEANUP_ID];
 
 function isShortcut(item) {
   return isFolder(item) && SHORTCUT_IDS.includes(item.id);
@@ -94,6 +97,7 @@ function withShortcuts(base, list) {
     if (!data.length) continue;
     const folder = { id: sc.id, name: sc.name || SHORTCUT_NAME, data, color: sc.color || 'yellow', imgFile: sc.imgFile || '' };
     if (!sc.imgFile) folder.img = '';
+    if (sc.until) folder.fmUntil = sc.until; // 정리 폴더: 이 시각까지만 유효(다른 기기가 지우지 않게)
     out.push(folder);
   }
   return [...out, ...plainBase];

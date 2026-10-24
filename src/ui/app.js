@@ -179,6 +179,7 @@ function renderMain(keepScroll) {
   head.classList.toggle('compact', ui.view === VIEW_ALL || ui.view === ROOT || !!ui.reorder);
   let html = '';
   if (ui.view === VIEW_ALL && !ui.query) {
+    html += cleanupBannerHtml();
     html += archiveBannerHtml();
     html += favHomeHtml(model);
     const tiles = model.folders.map(folderTileHtml).join('');
@@ -1133,6 +1134,7 @@ const ACTIONS = {
   snapshots: () => openSnapshots(),
   icons: () => openBatchIcons(),
   stats: () => openStats(),
+  'cleanup-end': () => cleanupEnd('정리 폴더를 없앴습니다'),
   'label-new': () => editLabelDialog(null),
   'label-edit': () => { const d = labelDef(ui.view.slice(VIEW_LABEL.length)); if (d) editLabelDialog(d); },
   'tag-selected': () => openLabelPicker([...ui.selected]),
@@ -1244,6 +1246,8 @@ async function openManager() {
     await shortcutReloadStores();
     ui.order = await readOrder();
     // 사이드바 즐겨찾기 폴더: 사이드바에서 고친 것·다른 기기 변경을 맞추고(꺼져 있는데 남아 있으면 지운다) 감시를 시작한다.
+    // 1.0.8 전부터 최근 대화 폴더를 켜 둔 경우에도 기본 아이콘을 넣는다.
+    if (plusStore.state.recent.on) await shortcutIconEnsure('recent');
     try { if (await saver.syncShortcut() === 'written') ui.order = await readOrder(); } catch (err) { console.log('[risu-folder-master] 즐겨찾기 폴더 맞추기 실패: ' + errorText(err)); }
     shortcutPollStart();
     if (shortcutAnyOn()) shortcutGuard();

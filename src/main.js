@@ -10,6 +10,7 @@ async function main() {
   try {
     await Risuai.onUnload(async () => {
       // 호스트가 1초만 기다리므로 즐겨찾기 폴더 정리를 가장 먼저 한다.
+      clearInterval(cleanup.timer);
       try { await shortcutUnloadCleanup(); } catch {}
       endDrag();
       rosterStop();

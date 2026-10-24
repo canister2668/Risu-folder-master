@@ -17,7 +17,10 @@ SLUG = {
     '단일봇': 'single', '멀티봇': 'multi', '시뮬봇': 'sim', '2차창작': 'fanwork',
     '오리지널': 'original', '유틸도구': 'utility', '즐겨찾기': 'favorite', '쿰질용': 'kumjil',
     '제작중': 'wip', '테스트': 'test', '보관함': 'archive', '미분류': 'unsorted',
+    '최근 대화': 'recent', '정리 중': 'cleanup',
 }
+# 사이드바 바로가기 폴더의 기본 아이콘(플러그인에 내장, 처음 쓸 때 RisuAI 에셋으로 저장).
+DEFAULT_ICONS = {'recent': '최근 대화', 'cleanup': '정리 중'}
 
 def webp(path, size, q):
     b = io.BytesIO()
@@ -41,6 +44,15 @@ def main():
           '// 폴더 그림 템플릿 목록: 이름·분류·종이 위치(512 기준 비율)·96px 섬네일.\n'
           'const TEMPLATES = ' + json.dumps(items, ensure_ascii=False) + ';\n')
     open(os.path.join(ROOT, 'src', 'ui', 'templates-data.js'), 'w', encoding='utf-8').write(js)
+    icons = {}
+    for kind, name in DEFAULT_ICONS.items():
+        path = os.path.join(SRC, name + '.png')
+        if os.path.exists(path):
+            icons[kind] = 'data:image/webp;base64,' + base64.b64encode(webp(path, 256, 86)).decode()
+    open(os.path.join(ROOT, 'src', 'ui', 'defaulticons.js'), 'w', encoding='utf-8').write(
+        '// scripts/build-templates.py 가 만든다. 직접 고치지 말 것.\n'
+        '// 사이드바 「최근 대화」·「정리 중」 폴더의 기본 아이콘(256px).\n'
+        'const DEFAULT_ICONS = ' + json.dumps(icons) + ';\n')
     print(len(items), 'templates,', round(len(js) / 1024), 'KB data')
 
 if __name__ == '__main__':

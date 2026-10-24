@@ -198,52 +198,57 @@ async function archiveMove(ids, label) {
 async function openDuplicates() {
   const ids = orderBotIds(ui.order);
   const groups = findDuplicates(ids, roster.chars, plusStore.state.dupIgnore);
-  const keep = new Map(groups.map((g) => [g.key, new Set([g.ids[0]])]));
+  // 정리할 봇(토글 켬). 처음엔 묶음마다 가장 최근에 대화한 봇 하나만 빼고 모두 켠다.
+  const pick = new Set(groups.flatMap((g) => g.ids.slice(1)));
   const ignored = new Set();
+  const live = () => groups.filter((g) => !ignored.has(g.key));
   const body = () => {
-    const live = groups.filter((g) => !ignored.has(g.key));
-    if (!live.length) return '<div class="fm-empty">이름이 같거나 비슷한 봇이 없습니다</div>';
-    return live.map((g) => {
+    if (!live().length) return '<div class="fm-empty">이름이 같거나 비슷한 봇이 없습니다</div>';
+    return live().map((g) => {
       const first = roster.chars.get(g.ids[0]);
       return `<section class="fm-dupe"><div class="fm-dupe-h">${avatarHtml(first, g.ids[0])}<b>${esc(first.name)}</b><span class="fm-badge warn">${g.ids.length}개</span><small>${g.same ? '이름 같음' : '이름 비슷함'}</small>
         <button class="fm-link" data-dup-ignore="${esc(g.key)}">이 묶음 무시</button></div>
         <div class="fm-dupe-rows">${g.ids.map((id) => {
           const c = roster.chars.get(id);
           const t = timeAgo(c.last);
-          const on = keep.get(g.key).has(id);
-          return `<div class="fm-dupe-row"><button class="fm-lrow ${on ? 'on' : ''}" data-dup-keep="${esc(g.key)}" data-id="${esc(id)}" role="checkbox" aria-checked="${on}" aria-label="남기기"><span class="fm-cb"></span></button>
+          const on = pick.has(id);
+          return `<div class="fm-dupe-row${on ? ' picked' : ''}">${favSwitchHtml(on, `data-dup-pick="${esc(id)}"`, `${c.name} 정리 대상`)}
             <span class="fm-dupe-name">${esc(c.name)}</span><span class="fm-dupe-where">${icon('folder')}${esc(favFolderName(id))}</span><span class="fm-dupe-last">${t ? esc(t.short) : '대화 없음'}</span>
             <button class="fm-btn fm-sm" data-dup-loc="${esc(id)}">${icon('locate')}찾기</button></div>`;
         }).join('')}</div></section>`;
     }).join('');
   };
-  const rest = () => groups.filter((g) => !ignored.has(g.key)).flatMap((g) => g.ids.filter((id) => !keep.get(g.key).has(id)));
+  const picked = () => live().flatMap((g) => g.ids.filter((id) => pick.has(id)));
   const act = await openModal(
     `<h3 id="fm-dialog-title">${icon('copy')} 중복 봇 찾기</h3>
-     <p class="fm-desc">새 버전을 다시 받다 보면 같은 봇이 쌓입니다. 이름이 같거나 버전 표기·「사본」만 다른 봇을 묶어 보여 줍니다. 봇을 지우지는 않습니다. 지우려면 「찾기」로 사이드바의 그 칸을 짚은 뒤 RisuAI에서 지우세요.</p>
+     <p class="fm-desc">이름이 같거나 버전 표기·「사본」만 다른 봇을 묶었습니다. 정리할 봇을 켜고 「정리 폴더로 꺼내기」를 누르면 사이드바 맨 위 「${CLEANUP_NAME}」 폴더에 모입니다. 거기서 봇을 눌러 RisuAI에서 지우세요. 폴더는 닫으면 사라지고, 봇은 원래 자리 그대로입니다.</p>
      ${unreadNote(ids, '중복 찾기')}
      <div class="fm-dupes" data-rows>${body()}</div>
-     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn primary" data-dup-archive>📦 보관함 폴더로 옮기기</button></div>`,
+     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn" data-dup-archive>📦 보관함으로</button><button class="fm-btn primary" data-dup-clean>🧹 정리 폴더로 꺼내기</button></div>`,
     (modal, close) => {
       modal.classList.add('fm-big');
       const rows = modal.querySelector('[data-rows]');
       const sync = () => {
         rerender(rows, body());
-        const n = rest().length;
-        modal.querySelector('[data-rest]').textContent = n ? `체크하지 않은 봇 ${n}개` : '';
+        const n = picked().length;
+        modal.querySelector('[data-rest]').textContent = n ? `정리할 봇 ${n}개` : '';
         modal.querySelector('[data-dup-archive]').disabled = !n;
+        const clean = modal.querySelector('[data-dup-clean]');
+        clean.disabled = !n;
+        clean.textContent = n ? `🧹 정리 폴더로 꺼내기 (${n})` : '🧹 정리 폴더로 꺼내기';
         lazyAvatars(rows);
       };
       rows.addEventListener('click', (e) => {
-        const k = e.target.closest('[data-dup-keep]');
-        if (k) { const set = keep.get(k.dataset.dupKeep); if (set.has(k.dataset.id)) { if (set.size > 1) set.delete(k.dataset.id); else toast('묶음마다 하나는 남겨야 합니다'); } else set.add(k.dataset.id); sync(); return; }
+        const k = e.target.closest('[data-dup-pick]');
+        if (k) { const id = k.dataset.dupPick; pick.has(id) ? pick.delete(id) : pick.add(id); sync(); return; }
         const ig = e.target.closest('[data-dup-ignore]');
         if (ig) { ignored.add(ig.dataset.dupIgnore); sync(); return; }
         const loc = e.target.closest('[data-dup-loc]');
         if (loc) close({ locate: loc.dataset.dupLoc });
       });
       modal.querySelector('[data-x]').onclick = () => close({ done: true });
-      modal.querySelector('[data-dup-archive]').onclick = () => close({ archive: rest() });
+      modal.querySelector('[data-dup-archive]').onclick = () => close({ archive: picked() });
+      modal.querySelector('[data-dup-clean]').onclick = () => close({ clean: picked() });
       bindReadAll(modal, close, openDuplicates);
       sync();
     },
@@ -251,7 +256,15 @@ async function openDuplicates() {
   if (ignored.size) await plusStore.change({ k: 'dupIgnore', add: [...ignored] }).catch(() => {});
   if (!act) return;
   if (act.locate) { locateBot(act.locate); return; }
-  if (act.archive?.length) await archiveMove(act.archive, `중복 봇 ${act.archive.length}개 → 보관함`);
+  if (act.archive?.length) { await archiveMove(act.archive, `중복 봇 ${act.archive.length}개 → 보관함`); return; }
+  if (act.clean?.length) {
+    try {
+      await cleanupStart(act.clean);
+      if (!cleanupLive().length) { toast('꺼낼 봇이 없습니다', { error: true }); return; }
+      toast(`사이드바 맨 위 「${CLEANUP_NAME}」 폴더에 ${act.clean.length}개를 꺼냈습니다`, { ms: 4000 });
+      closeManager();
+    } catch (err) { toastError(err); }
+  }
 }
 
 // ── ④ 정리 마법사 ──
@@ -691,6 +704,9 @@ const PLUS_CSS = `
 @media (hover:none){.fm-tagbtn{display:none}.fm-tagbtn.on{display:grid;opacity:.8}}
 .fm-lbl-dot{color:var(--c);font-size:14px}
 .fm-lbl-dot i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.fm-sc-icon{flex:none;border-radius:10px;padding:0}
+.fm-sc-icon .fm-thumb{width:42px;height:42px;border-radius:11px}
+.fm-sc-icon:hover .fm-thumb,.fm-sc-icon:focus-visible .fm-thumb{outline:2px solid var(--accent);outline-offset:2px}
 .fm-lbl-head{padding-left:4px}
 .fm-rail-fold{display:inline-flex;align-items:center;gap:5px;padding:3px 6px;border-radius:6px;font:inherit;letter-spacing:inherit;color:inherit}
 .fm-rail-fold:hover{background:var(--surface-2);color:var(--text)}
@@ -728,7 +744,8 @@ const PLUS_CSS = `
 .fm-dupe-h small{color:var(--faint);font-size:11.5px}
 .fm-dupe-h .fm-link{margin-left:auto}
 .fm-dupe-row{display:grid;grid-template-columns:auto minmax(0,1.4fr) minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--line);font-size:12.5px}
-.fm-dupe-row .fm-lrow{padding:4px}
+.fm-dupe-row .fm-switch{transform:scale(.85)}
+.fm-dupe-row.picked .fm-dupe-name{color:var(--text);font-weight:650}
 .fm-dupe-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fm-dupe-where{display:inline-flex;align-items:center;gap:4px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .fm-dupe-where .fm-i{width:13px;height:13px;flex:none}
