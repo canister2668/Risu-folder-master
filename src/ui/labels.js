@@ -72,7 +72,7 @@ function labelDot(d) {
   return `<span class="fm-thumb plain fm-lbl-dot" style="--c:${labelHex(d)}">${d.emoji ? esc(d.emoji) : '<i></i>'}</span>`;
 }
 
-// 왼쪽 목록의 「내 라벨」 칸. 접으면 라벨 줄을 숨기고, 지금 보고 있는 라벨 하나만 남긴다(접기 상태는 기기에 기억).
+// 왼쪽 목록의 「내 라벨」 칸. 접으면 라벨 줄을 숨기고, 지금 보고 있는 라벨 하나만 남긴다. 창을 열 때마다 접힌 채로 시작한다.
 function labelRailHtml(nav) {
   const defs = labelStore.state.defs;
   const fold = labelUi.fold;

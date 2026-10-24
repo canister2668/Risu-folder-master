@@ -123,7 +123,7 @@ function plusSidebarSettingsHtml(d) {
      <div class="fm-set-row"><div><b>🕘 최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다).</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>보여 줄 개수</b></div>${seg('data-rcount', [[5, '5'], [8, '8'], [12, '12']], d.count)}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>즐겨찾기 봇은 빼기</b><small>두 폴더에 같은 봇이 겹치지 않게</small></div>${favSwitchHtml(d.noStars, 'data-sw="noStars"', '최근 대화에서 즐겨찾기 봇 빼기')}</div>
-     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 → 즐겨찾기'], ['favorites', '즐겨찾기 → 최근']], d.first)}</div>
+     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 먼저'], ['favorites', '즐겨찾기 먼저']], d.first)}</div>
      <div class="fm-set-row"><div><b>🏷️ 라벨 폴더</b><small>라벨 하나를 사이드바 맨 위 폴더로 (예: 「진행 중」)</small></div></div>
      <div class="fm-chips" role="group" aria-label="라벨 폴더">${[['', '쓰지 않음'], ...labels.map((l) => [l.id, `${l.emoji ? l.emoji + ' ' : ''}${l.name}`])].map(([v, t]) => `<button data-lfolder="${esc(v)}" class="${d.lfolder === v ? 'on' : ''}" aria-pressed="${d.lfolder === v}">${esc(t)}</button>`).join('')}</div>`;
 }

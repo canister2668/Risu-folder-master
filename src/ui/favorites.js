@@ -365,7 +365,10 @@ const FAV_CSS = `
 .fm-switch:disabled{opacity:.5}
 @media (prefers-reduced-motion:reduce){.fm-switch,.fm-switch i{transition:none}}
 .fm-set-row{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
-.fm-set-row div{flex:1;min-width:0}
+.fm-set-row{flex-wrap:wrap}
+.fm-set-row div{flex:1 1 180px;min-width:0}
+.fm-set-row>.fm-fav-sort,.fm-set-row>.fm-switch{flex:none;max-width:100%}
+.fm-set-row>.fm-fav-sort{margin-left:auto}
 .fm-set-row b{display:block;font-size:13px}
 .fm-set-row small{display:block;font-size:11.5px;color:var(--muted);line-height:1.5}
 @media (max-width:560px){.fm-fav-bar{flex-wrap:wrap}.fm-fav-bar-acts{width:100%;justify-content:flex-end}}

@@ -797,13 +797,13 @@ async function loadPrefs() {
     if (saved && FAV_SORTS.some(([k]) => k === saved.favSort)) fav.sort = saved.favSort;
     fav.fold = !!(saved && saved.favFold);
     if (saved && ['recent', 'order'].includes(saved.labelSort)) labelUi.sort = saved.labelSort;
-    labelUi.fold = !(saved && saved.labelFold === false);
+    labelUi.fold = true; // 「내 라벨」 칸은 창을 열 때마다 접힌 상태로 시작한다(펼친 상태를 기억하지 않음)
   } catch {}
   await favLoad();
 }
 
 function savePrefs() {
-  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold, labelSort: labelUi.sort, labelFold: labelUi.fold }); } catch {}
+  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold, labelSort: labelUi.sort }); } catch {}
 }
 
 // ── 껍데기·이벤트 ──
@@ -1171,7 +1171,7 @@ function bindEvents(root) {
     if (tag) { if (!ui.reorder) openLabelPicker([tag.dataset.tag]); return; }
     const lsort = t.closest('[data-label-sort]');
     if (lsort) { labelUi.sort = lsort.dataset.labelSort; savePrefs(); renderMain(true); return; }
-    if (t.closest('[data-label-fold]')) { labelUi.fold = !labelUi.fold; savePrefs(); renderRail(); ui.app.querySelector('.fm-rail [data-label-fold]:not([hidden])')?.focus({ preventScroll: true }); return; }
+    if (t.closest('[data-label-fold]')) { labelUi.fold = !labelUi.fold; renderRail(); ui.app.querySelector('.fm-rail [data-label-fold]:not([hidden])')?.focus({ preventScroll: true }); return; }
     const sort = t.closest('[data-fav-sort]');
     if (sort) { fav.sort = sort.dataset.favSort; savePrefs(); renderMain(true); return; }
     if (t.closest('[data-fav-fold]')) { fav.fold = !fav.fold; savePrefs(); renderMain(true); return; }

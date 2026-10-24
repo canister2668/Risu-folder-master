@@ -73,9 +73,12 @@ const extra = () => [
     ok((await p.textContent('.fm-head h2')).includes('진행 중'), 'still viewing the label');
     await p.click('.fm-rail .fm-rail-fold'); await p.waitForTimeout(200);
     ok(await p.locator('.fm-rail .fm-nav[data-label]').count() === 1, 'folded rail keeps the open label');
-    ok((await p.evaluate(() => window.__local.get('risuFolderMaster.ui')))?.labelFold === true, 'fold state saved');
+    // 펼친 채로 닫았다 다시 열어도 접힌 상태로 시작한다
     await p.click('.fm-rail .fm-rail-fold'); await p.waitForTimeout(200);
-    ok((await p.evaluate(() => window.__local.get('risuFolderMaster.ui')))?.labelFold === false, 'unfold state saved');
+    await p.click('[data-act="close"]'); await p.waitForTimeout(300);
+    await p.evaluate(() => window.__open()); await p.waitForSelector('.fm-rail .fm-rail-fold');
+    ok(await p.getAttribute('.fm-rail .fm-rail-fold', 'aria-expanded') === 'false', 'reopening starts folded');
+    await p.click('.fm-rail .fm-rail-fold'); await p.waitForTimeout(200);
     // 「진행 중」은 하나만
     await menu(p, 'settings');
     await p.click('.fm-modal [data-lsolo="l-play"]');

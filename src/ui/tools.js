@@ -26,7 +26,7 @@ function bindReadAll(modal, close, reopen) {
 
 function miniBot(id) {
   const c = roster.chars.get(id);
-  return `<span class="fm-mini">${avatarHtml(c, id).replace('class="fm-av"', 'class="fm-av sm"')}${esc(botName(id) || '…')}</span>`;
+  return `<span class="fm-minibot">${avatarHtml(c, id).replace('class="fm-av"', 'class="fm-av sm"')}${esc(botName(id) || '…')}</span>`;
 }
 
 function lazyAvatars(root) {
@@ -268,7 +268,7 @@ async function openWizard(mode = 'name') {
     return `<section class="fm-wz${checked ? '' : ' off'}"><div class="fm-wz-h"><button class="fm-lrow ${checked ? 'on' : ''}" data-wz="${esc(g.key)}" role="checkbox" aria-checked="${checked}" aria-label="이 제안 쓰기"><span class="fm-cb"></span></button>${thumb}
       <div class="fm-wz-t"><b>${esc(titles.get(g.key))} <small>${f ? '(있는 폴더)' : '(새 폴더)'}</small></b><small>봇 ${g.ids.length}개${f ? ' 추가' : ''}</small></div>
       ${f ? '' : `<button class="fm-btn ghost fm-icon" data-wz-name="${esc(g.key)}" title="새 폴더 이름 바꾸기" aria-label="새 폴더 이름 바꾸기">${icon('edit')}</button>`}<span class="fm-why">${esc(g.why)}</span></div>
-      <div class="fm-minis">${g.ids.slice(0, 5).map(miniBot).join('')}${g.ids.length > 5 ? `<span class="fm-mini more">+${g.ids.length - 5}개 더</span>` : ''}</div></section>`;
+      <div class="fm-minis">${g.ids.slice(0, 5).map(miniBot).join('')}${g.ids.length > 5 ? `<span class="fm-minibot more">+${g.ids.length - 5}개 더</span>` : ''}</div></section>`;
   }).join('') || `<div class="fm-empty">${model.root.length ? '묶을 만한 봇을 찾지 못했습니다. 다른 기준을 골라 보세요' : '폴더 밖 봇이 없습니다'}</div>`;
   const summary = () => {
     const picked = groups.filter((g) => on.has(g.key));
@@ -746,8 +746,9 @@ const PLUS_CSS = `
 .fm-wz-t>small{display:block;color:var(--faint);font-size:11.5px}
 .fm-why{font-size:11px;color:var(--accent-2);background:var(--accent-bg);padding:2px 8px;border-radius:999px;white-space:nowrap}
 .fm-minis{display:flex;flex-wrap:wrap;gap:4px}
-.fm-mini{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.fm-mini.more{padding:3px 9px;color:var(--muted)}
+/* .fm-mini 는 사이드바 배열 미리보기(styles.js)가 쓰는 이름이라 다른 이름을 쓴다 */
+.fm-minibot{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-minibot.more{padding:3px 9px;color:var(--muted)}
 .fm-av.sm{width:20px;height:20px;border-radius:50%;font-size:9px;flex:none}
 .fm-arch-banner{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 14px;border-radius:12px;border:1px solid #5a4020;background:#1f1b14}
 .fm-arch-banner div{flex:1;min-width:0}
@@ -830,7 +831,9 @@ const PLUS_CSS = `
   .fm-dupe-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:2px}
   .fm-dupe-where,.fm-dupe-last{grid-column:2}
   .fm-snap{flex-wrap:wrap}.fm-snap-acts{width:100%;justify-content:flex-end}
-  .fm-arch-banner{flex-wrap:wrap}.fm-arch-banner .fm-btn{flex:1}
+  .fm-arch-banner{flex-wrap:wrap;align-items:flex-start}
+  .fm-arch-banner>div{flex:1 1 calc(100% - 48px)}
+  .fm-arch-banner .fm-btn{flex:1 1 0;justify-content:center}
   .fm-pal-ft{display:none}
 }
 `;

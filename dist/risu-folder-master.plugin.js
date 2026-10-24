@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.7
+//@display-name 📁 Risu 폴더 마스터 v1.0.8
 //@api 3.0
-//@version 1.0.7
+//@version 1.0.8
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.7 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.0.8 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.7";
+const FM_VERSION = "1.0.8";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -2997,7 +2997,10 @@ const FAV_CSS = `
 .fm-switch:disabled{opacity:.5}
 @media (prefers-reduced-motion:reduce){.fm-switch,.fm-switch i{transition:none}}
 .fm-set-row{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
-.fm-set-row div{flex:1;min-width:0}
+.fm-set-row{flex-wrap:wrap}
+.fm-set-row div{flex:1 1 180px;min-width:0}
+.fm-set-row>.fm-fav-sort,.fm-set-row>.fm-switch{flex:none;max-width:100%}
+.fm-set-row>.fm-fav-sort{margin-left:auto}
 .fm-set-row b{display:block;font-size:13px}
 .fm-set-row small{display:block;font-size:11.5px;color:var(--muted);line-height:1.5}
 @media (max-width:560px){.fm-fav-bar{flex-wrap:wrap}.fm-fav-bar-acts{width:100%;justify-content:flex-end}}
@@ -3130,7 +3133,7 @@ function plusSidebarSettingsHtml(d) {
      <div class="fm-set-row"><div><b>🕘 최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다).</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>보여 줄 개수</b></div>${seg('data-rcount', [[5, '5'], [8, '8'], [12, '12']], d.count)}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>즐겨찾기 봇은 빼기</b><small>두 폴더에 같은 봇이 겹치지 않게</small></div>${favSwitchHtml(d.noStars, 'data-sw="noStars"', '최근 대화에서 즐겨찾기 봇 빼기')}</div>
-     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 → 즐겨찾기'], ['favorites', '즐겨찾기 → 최근']], d.first)}</div>
+     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 먼저'], ['favorites', '즐겨찾기 먼저']], d.first)}</div>
      <div class="fm-set-row"><div><b>🏷️ 라벨 폴더</b><small>라벨 하나를 사이드바 맨 위 폴더로 (예: 「진행 중」)</small></div></div>
      <div class="fm-chips" role="group" aria-label="라벨 폴더">${[['', '쓰지 않음'], ...labels.map((l) => [l.id, `${l.emoji ? l.emoji + ' ' : ''}${l.name}`])].map(([v, t]) => `<button data-lfolder="${esc(v)}" class="${d.lfolder === v ? 'on' : ''}" aria-pressed="${d.lfolder === v}">${esc(t)}</button>`).join('')}</div>`;
 }
@@ -3250,7 +3253,7 @@ function labelDot(d) {
   return `<span class="fm-thumb plain fm-lbl-dot" style="--c:${labelHex(d)}">${d.emoji ? esc(d.emoji) : '<i></i>'}</span>`;
 }
 
-// 왼쪽 목록의 「내 라벨」 칸. 접으면 라벨 줄을 숨기고, 지금 보고 있는 라벨 하나만 남긴다(접기 상태는 기기에 기억).
+// 왼쪽 목록의 「내 라벨」 칸. 접으면 라벨 줄을 숨기고, 지금 보고 있는 라벨 하나만 남긴다. 창을 열 때마다 접힌 채로 시작한다.
 function labelRailHtml(nav) {
   const defs = labelStore.state.defs;
   const fold = labelUi.fold;
@@ -3471,7 +3474,7 @@ function bindReadAll(modal, close, reopen) {
 
 function miniBot(id) {
   const c = roster.chars.get(id);
-  return `<span class="fm-mini">${avatarHtml(c, id).replace('class="fm-av"', 'class="fm-av sm"')}${esc(botName(id) || '…')}</span>`;
+  return `<span class="fm-minibot">${avatarHtml(c, id).replace('class="fm-av"', 'class="fm-av sm"')}${esc(botName(id) || '…')}</span>`;
 }
 
 function lazyAvatars(root) {
@@ -3713,7 +3716,7 @@ async function openWizard(mode = 'name') {
     return `<section class="fm-wz${checked ? '' : ' off'}"><div class="fm-wz-h"><button class="fm-lrow ${checked ? 'on' : ''}" data-wz="${esc(g.key)}" role="checkbox" aria-checked="${checked}" aria-label="이 제안 쓰기"><span class="fm-cb"></span></button>${thumb}
       <div class="fm-wz-t"><b>${esc(titles.get(g.key))} <small>${f ? '(있는 폴더)' : '(새 폴더)'}</small></b><small>봇 ${g.ids.length}개${f ? ' 추가' : ''}</small></div>
       ${f ? '' : `<button class="fm-btn ghost fm-icon" data-wz-name="${esc(g.key)}" title="새 폴더 이름 바꾸기" aria-label="새 폴더 이름 바꾸기">${icon('edit')}</button>`}<span class="fm-why">${esc(g.why)}</span></div>
-      <div class="fm-minis">${g.ids.slice(0, 5).map(miniBot).join('')}${g.ids.length > 5 ? `<span class="fm-mini more">+${g.ids.length - 5}개 더</span>` : ''}</div></section>`;
+      <div class="fm-minis">${g.ids.slice(0, 5).map(miniBot).join('')}${g.ids.length > 5 ? `<span class="fm-minibot more">+${g.ids.length - 5}개 더</span>` : ''}</div></section>`;
   }).join('') || `<div class="fm-empty">${model.root.length ? '묶을 만한 봇을 찾지 못했습니다. 다른 기준을 골라 보세요' : '폴더 밖 봇이 없습니다'}</div>`;
   const summary = () => {
     const picked = groups.filter((g) => on.has(g.key));
@@ -4191,8 +4194,9 @@ const PLUS_CSS = `
 .fm-wz-t>small{display:block;color:var(--faint);font-size:11.5px}
 .fm-why{font-size:11px;color:var(--accent-2);background:var(--accent-bg);padding:2px 8px;border-radius:999px;white-space:nowrap}
 .fm-minis{display:flex;flex-wrap:wrap;gap:4px}
-.fm-mini{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.fm-mini.more{padding:3px 9px;color:var(--muted)}
+/* .fm-mini 는 사이드바 배열 미리보기(styles.js)가 쓰는 이름이라 다른 이름을 쓴다 */
+.fm-minibot{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-minibot.more{padding:3px 9px;color:var(--muted)}
 .fm-av.sm{width:20px;height:20px;border-radius:50%;font-size:9px;flex:none}
 .fm-arch-banner{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 14px;border-radius:12px;border:1px solid #5a4020;background:#1f1b14}
 .fm-arch-banner div{flex:1;min-width:0}
@@ -4275,7 +4279,9 @@ const PLUS_CSS = `
   .fm-dupe-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:2px}
   .fm-dupe-where,.fm-dupe-last{grid-column:2}
   .fm-snap{flex-wrap:wrap}.fm-snap-acts{width:100%;justify-content:flex-end}
-  .fm-arch-banner{flex-wrap:wrap}.fm-arch-banner .fm-btn{flex:1}
+  .fm-arch-banner{flex-wrap:wrap;align-items:flex-start}
+  .fm-arch-banner>div{flex:1 1 calc(100% - 48px)}
+  .fm-arch-banner .fm-btn{flex:1 1 0;justify-content:center}
   .fm-pal-ft{display:none}
 }
 `;
@@ -5105,13 +5111,13 @@ async function loadPrefs() {
     if (saved && FAV_SORTS.some(([k]) => k === saved.favSort)) fav.sort = saved.favSort;
     fav.fold = !!(saved && saved.favFold);
     if (saved && ['recent', 'order'].includes(saved.labelSort)) labelUi.sort = saved.labelSort;
-    labelUi.fold = !(saved && saved.labelFold === false);
+    labelUi.fold = true; // 「내 라벨」 칸은 창을 열 때마다 접힌 상태로 시작한다(펼친 상태를 기억하지 않음)
   } catch {}
   await favLoad();
 }
 
 function savePrefs() {
-  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold, labelSort: labelUi.sort, labelFold: labelUi.fold }); } catch {}
+  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold, labelSort: labelUi.sort }); } catch {}
 }
 
 // ── 껍데기·이벤트 ──
@@ -5479,7 +5485,7 @@ function bindEvents(root) {
     if (tag) { if (!ui.reorder) openLabelPicker([tag.dataset.tag]); return; }
     const lsort = t.closest('[data-label-sort]');
     if (lsort) { labelUi.sort = lsort.dataset.labelSort; savePrefs(); renderMain(true); return; }
-    if (t.closest('[data-label-fold]')) { labelUi.fold = !labelUi.fold; savePrefs(); renderRail(); ui.app.querySelector('.fm-rail [data-label-fold]:not([hidden])')?.focus({ preventScroll: true }); return; }
+    if (t.closest('[data-label-fold]')) { labelUi.fold = !labelUi.fold; renderRail(); ui.app.querySelector('.fm-rail [data-label-fold]:not([hidden])')?.focus({ preventScroll: true }); return; }
     const sort = t.closest('[data-fav-sort]');
     if (sort) { fav.sort = sort.dataset.favSort; savePrefs(); renderMain(true); return; }
     if (t.closest('[data-fav-fold]')) { fav.fold = !fav.fold; savePrefs(); renderMain(true); return; }
