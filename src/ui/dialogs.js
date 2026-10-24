@@ -46,6 +46,9 @@ function openModal(html, setup) {
     modal.dispatchEvent(new CustomEvent('fm-close', { detail: value }));
   };
   const onKey = (e) => {
+    // 창 위에 창이 열려 있으면 맨 위 창만 키를 받는다(Esc 한 번에 둘 다 닫히지 않게).
+    const backs = document.querySelectorAll('.fm-modal-back');
+    if (backs[backs.length - 1] !== back) return;
     if (e.key === 'Escape') { e.stopPropagation(); close(null); return; }
     if (e.key !== 'Tab') return;
     const items = [...modal.querySelectorAll('button:not([disabled]):not([hidden]), input:not([hidden]), [tabindex="0"]')].filter((el) => el.offsetParent !== null);
@@ -62,6 +65,23 @@ function openModal(html, setup) {
   setup(modal, close);
   if (!modal.contains(document.activeElement)) setTimeout(() => { if (!modal.contains(document.activeElement)) modal.querySelector('.primary, button:not([disabled])')?.focus(); }, 0);
   return new Promise((resolve) => modal.addEventListener('fm-close', (e) => resolve(e.detail)));
+}
+
+// 목록을 다시 그려도 키보드 포커스·스크롤을 지킨다. 포커스는 같은 data-* 속성을 가진 요소로 돌려준다.
+function rerender(box, html) {
+  const a = document.activeElement;
+  let sel = null;
+  if (a && box.contains(a)) {
+    const attrs = [...a.attributes].filter((x) => x.name.startsWith('data-'));
+    if (attrs.length) sel = attrs.map((x) => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
+  }
+  const top = box.scrollTop;
+  box.innerHTML = html;
+  box.scrollTop = top;
+  if (!sel) return;
+  // 포커스가 있던 줄이 사라졌으면 목록의 첫 버튼, 그것도 없으면 창의 닫기·확인 버튼으로.
+  const next = box.querySelector(sel) || box.querySelector('button:not([disabled])') || box.closest('.fm-modal')?.querySelector('[data-x], .primary');
+  next?.focus({ preventScroll: true });
 }
 
 function askText(title, { value = '', placeholder = '', confirm = '확인', desc = '' } = {}) {

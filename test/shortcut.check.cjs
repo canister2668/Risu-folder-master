@@ -99,13 +99,13 @@ const SC = 'risu-folder-master-favorites';
     assert.equal(await page.locator('[data-act="fav-folder-toggle"][role="switch"]').getAttribute('aria-checked'), 'false');
     // 설정 창 토글: 저장해야 적용, 취소하면 그대로
     const settings = async () => { await page.click('[data-act="menu"]'); await page.click('[data-act="settings"]'); };
-    await settings(); await page.click('[data-sidefav]'); await page.keyboard.press('Escape'); await page.waitForTimeout(500);
+    await settings(); await page.click('[data-sw="fav"]'); await page.keyboard.press('Escape'); await page.waitForTimeout(500);
     assert.ok(!(await order()).some((x) => x && x.id === SC), 'settings toggle + cancel: nothing written');
-    await settings(); await page.click('[data-sidefav]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
+    await settings(); await page.click('[data-sw="fav"]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
     assert.equal((await order())[0].id, SC, 'settings toggle + save: on');
     assert.equal(await page.locator('[data-act="fav-folder-toggle"]').getAttribute('aria-checked'), 'true');
-    await settings(); assert.equal(await page.locator('[data-sidefav]').getAttribute('aria-checked'), 'true');
-    await page.click('[data-sidefav]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
+    await settings(); assert.equal(await page.locator('[data-sw="fav"]').getAttribute('aria-checked'), 'true');
+    await page.click('[data-sw="fav"]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
     assert.ok(!(await order()).some((x) => x && x.id === SC), 'settings toggle + save: off');
     assert.deepEqual(errors, []);
     console.log('PASS shortcut: on, star sync, normal saves keep it, no duplicate report, sidebar edits reverted, reload keeps, uninstall/off removes');

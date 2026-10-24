@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.6
+//@display-name 📁 Risu 폴더 마스터 v1.0.7
 //@api 3.0
-//@version 1.0.6
+//@version 1.0.7
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.6 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.0.7 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.6";
+const FM_VERSION = "1.0.7";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -324,16 +324,20 @@ function removeGhosts(order, validIds) {
 }
 
 // ── src/core/shortcut.js ──
-// 사이드바 즐겨찾기 바로가기 폴더. 봇을 복사하지 않고 같은 봇 ID를 한 번 더 적는 폴더다
+// 사이드바 바로가기 폴더(즐겨찾기·최근 대화·라벨). 봇을 복사하지 않고 같은 봇 ID를 한 번 더 적는 폴더다
 // (사이드바에서 누르면 같은 봇·같은 채팅이 열린다. RisuAI는 순서 목록의 같은 ID를 자리마다 그리고 지우지 않는다).
-// 이 폴더의 주인은 폴더 마스터다. 내용·이름·그림은 즐겨찾기 설정에서 만들고, 사이드바에서 고친 것은 되돌린다.
-// 폴더 마스터의 다른 계산은 모두 이 폴더를 뺀 순서(base)로 한다. 호스트 API를 부르지 않는 순수 연산이다.
+// 이 폴더들의 주인은 폴더 마스터다. 내용·이름·그림은 폴더 마스터 설정에서 만들고, 사이드바에서 고친 것은 되돌린다.
+// 폴더 마스터의 다른 계산은 모두 이 폴더들을 뺀 순서(base)로 한다. 호스트 API를 부르지 않는 순수 연산이다.
 
 const SHORTCUT_ID = 'risu-folder-master-favorites';
 const SHORTCUT_NAME = '⭐ 즐겨찾기';
+const RECENT_ID = 'risu-folder-master-recent';
+const RECENT_NAME = '🕘 최근 대화';
+const LABEL_FOLDER_ID = 'risu-folder-master-label';
+const SHORTCUT_IDS = [SHORTCUT_ID, RECENT_ID, LABEL_FOLDER_ID];
 
 function isShortcut(item) {
-  return isFolder(item) && item.id === SHORTCUT_ID;
+  return isFolder(item) && SHORTCUT_IDS.includes(item.id);
 }
 
 // 봇이 들어 있는 곳: 폴더 id, 폴더 밖이면 null, 없으면 undefined.
@@ -366,7 +370,7 @@ function dropBotAt(order, id, keepIndex) {
 // 지난 순서를 모르면 겹침은 건드리지 않는다(정리 점검이 알려 준다).
 function shortcutBase(raw, last) {
   const order = cloneOrder(raw);
-  const sc = order.find(isShortcut);
+  const scIds = order.filter(isShortcut).flatMap((f) => f.data);
   let base = order.filter((x) => !isShortcut(x));
   if (last) {
     const lastIds = orderBotIds(last);
@@ -384,9 +388,9 @@ function shortcutBase(raw, last) {
       base = dropBotAt(base, id, keep);
     }
   }
-  if (sc) {
+  if (scIds.length) {
     const present = new Set(orderBotIds(base));
-    for (const id of sc.data) {
+    for (const id of scIds) {
       if (present.has(id)) continue;
       present.add(id);
       const fid = last ? botContainer(last, id) : undefined;
@@ -404,25 +408,438 @@ function shortcutBase(raw, last) {
   return base;
 }
 
-// base 앞에 바로가기 폴더를 붙인다. 켜져 있지 않거나 순서에 있는 별표 봇이 없으면 붙이지 않는다(RisuAI는 빈 폴더를 지운다).
-// opts = { on, stars, name, color, imgFile }
-function withShortcut(base, opts) {
+// base 앞에 바로가기 폴더들을 붙인다. list = [{ id, name, color, imgFile, ids }] (사이드바 위에서부터).
+// 순서에 있는 봇이 하나도 없는 폴더는 붙이지 않는다(RisuAI는 빈 폴더를 지운다).
+function withShortcuts(base, list) {
   const plainBase = base.filter((x) => !isShortcut(x));
-  if (!opts || !opts.on) return plainBase;
   const live = new Set(orderBotIds(plainBase));
-  const data = [...new Set((opts.stars || []).filter((id) => live.has(id)))];
-  if (!data.length) return plainBase;
-  const folder = { id: SHORTCUT_ID, name: opts.name || SHORTCUT_NAME, data, color: opts.color || 'yellow', imgFile: opts.imgFile || '' };
-  if (!opts.imgFile) folder.img = '';
-  return [folder, ...plainBase];
+  const out = [];
+  for (const sc of list || []) {
+    if (!sc || !SHORTCUT_IDS.includes(sc.id) || out.some((f) => f.id === sc.id)) continue;
+    const data = [...new Set((sc.ids || []).filter((id) => live.has(id)))];
+    if (!data.length) continue;
+    const folder = { id: sc.id, name: sc.name || SHORTCUT_NAME, data, color: sc.color || 'yellow', imgFile: sc.imgFile || '' };
+    if (!sc.imgFile) folder.img = '';
+    out.push(folder);
+  }
+  return [...out, ...plainBase];
+}
+
+// 즐겨찾기 하나만 쓰던 옛 형태(opts = { on, stars, name, color, imgFile })도 받는다. 배열이면 withShortcuts.
+function withShortcut(base, opts) {
+  if (Array.isArray(opts)) return withShortcuts(base, opts);
+  if (!opts || !opts.on) return withShortcuts(base, []);
+  return withShortcuts(base, [{ id: SHORTCUT_ID, name: opts.name || SHORTCUT_NAME, color: opts.color || 'yellow', imgFile: opts.imgFile || '', ids: opts.stars }]);
 }
 
 // 저장할 때 바로가기 폴더의 그림 칸(img)은 RisuAI가 채운 값을 그대로 둔다(imgFile 이 같을 때).
 function keepShortcutImg(next, raw) {
-  const old = (raw || []).find(isShortcut);
-  const now = next.find(isShortcut);
-  if (old && now && old.imgFile === now.imgFile && old.img && now.imgFile) now.img = old.img;
+  for (const now of next.filter(isShortcut)) {
+    const old = (raw || []).find((x) => isShortcut(x) && x.id === now.id);
+    if (old && old.imgFile === now.imgFile && old.img && now.imgFile) now.img = old.img;
+  }
   return next;
+}
+
+// ── src/core/plus.js ──
+// 1.0.7 기능의 순수 연산: 라벨, 최근 대화 순위, 중복 봇, 정리 마법사 제안, 배치 기록 복원·비교, 보관함 후보, 통계.
+// 호스트 API를 부르지 않는다. chars 는 Map(id → { name, last, creator, tags }) 이다(roster.chars 와 같은 모양).
+
+const DAY_MS = 86400e3;
+
+// ── 라벨 ──
+
+const LABEL_COLORS = ['yellow', 'blue', 'green', 'pink', 'purple', 'red', 'indigo', 'default'];
+const LABEL_DEFAULTS = [
+  { id: 'l-play', name: '진행 중', emoji: '▶', color: 'yellow' },
+  { id: 'l-later', name: '나중에 할 것', emoji: '🔖', color: 'blue' },
+  { id: 'l-done', name: '엔딩 봄', emoji: '🏁', color: 'green' },
+  { id: 'l-love', name: '최애', emoji: '💖', color: 'pink' },
+  { id: 'l-light', name: '가볍게', emoji: '☕', color: 'purple' },
+];
+const LABEL_MAX = 24;
+const LABEL_NEW_DAYS = 7;
+
+function labelDefNorm(d) {
+  if (!d || typeof d !== 'object' || typeof d.id !== 'string' || !d.id) return null;
+  const name = typeof d.name === 'string' ? d.name.trim().slice(0, 24) : '';
+  if (!name) return null;
+  return {
+    id: d.id.slice(0, 40),
+    name,
+    emoji: typeof d.emoji === 'string' ? [...d.emoji].slice(0, 2).join('') : '',
+    color: LABEL_COLORS.includes(d.color) ? d.color : 'default',
+  };
+}
+
+// 서버에 저장하는 라벨 기록. 처음(저장된 것이 없을 때)은 기본 라벨 5개.
+function labelsNorm(v) {
+  const o = v && typeof v === 'object' ? v : null;
+  const defs = [];
+  for (const d of Array.isArray(o?.defs) ? o.defs : LABEL_DEFAULTS) {
+    const n = labelDefNorm(d);
+    if (n && !defs.some((x) => x.id === n.id) && defs.length < LABEL_MAX) defs.push(n);
+  }
+  const ids = new Set(defs.map((d) => d.id));
+  const tags = {};
+  if (o && o.tags && typeof o.tags === 'object') {
+    for (const [bot, list] of Object.entries(o.tags)) {
+      if (!Array.isArray(list)) continue;
+      const clean = [...new Set(list.filter((l) => ids.has(l)))];
+      if (clean.length) tags[bot] = clean;
+    }
+  }
+  const opts = o && o.opts && typeof o.opts === 'object' ? o.opts : {};
+  return {
+    defs,
+    tags,
+    opts: {
+      solo: typeof opts.solo === 'string' && ids.has(opts.solo) ? opts.solo : '',
+      finish: typeof opts.finish === 'string' ? (ids.has(opts.finish) ? opts.finish : '') : (ids.has('l-done') ? 'l-done' : ''),
+    },
+  };
+}
+
+// 라벨 바꾸기 연산. 같은 연산을 두 번 적용해도 결과가 같도록 만든다(저장 반영이 늦는 서버에서 다시 얹기 때문).
+// op = { t:'set', bot, labels } | { t:'add', bots, label } | { t:'remove', bots, label }
+//    | { t:'def', def } (추가·고치기) | { t:'drop', label } | { t:'opt', key, value }
+function labelsApply(state, op) {
+  const s = labelsNorm(state);
+  const solo = s.opts.solo;
+  const clearSolo = (except) => {
+    for (const [b, list] of Object.entries(s.tags)) if (b !== except && list.includes(solo)) s.tags[b] = list.filter((l) => l !== solo);
+  };
+  if (op.t === 'set') {
+    s.tags[op.bot] = [...new Set((op.labels || []).filter((l) => s.defs.some((d) => d.id === l)))];
+    if (solo && s.tags[op.bot].includes(solo) && !op.keepSolo) clearSolo(op.bot);
+  } else if (op.t === 'add') {
+    for (const b of op.bots || []) s.tags[b] = [...new Set([...(s.tags[b] || []), op.label])];
+    if (solo && op.label === solo && (op.bots || []).length === 1) clearSolo(op.bots[0]);
+  } else if (op.t === 'remove') {
+    for (const b of op.bots || []) if (s.tags[b]) s.tags[b] = s.tags[b].filter((l) => l !== op.label);
+  } else if (op.t === 'def') {
+    const d = labelDefNorm(op.def);
+    if (d) {
+      const i = s.defs.findIndex((x) => x.id === d.id);
+      if (i >= 0) s.defs[i] = d;
+      else if (s.defs.length < LABEL_MAX) s.defs.push(d);
+    }
+  } else if (op.t === 'drop') {
+    s.defs = s.defs.filter((d) => d.id !== op.label);
+  } else if (op.t === 'opt') {
+    s.opts[op.key] = op.value;
+  }
+  return labelsNorm(s);
+}
+
+function labelsOf(state, bot) {
+  return state.tags[bot] || [];
+}
+
+// 순서에 없는 봇의 라벨을 지운다(지워진 봇이 쌓이지 않게).
+function labelsPrune(state, liveIds) {
+  if (!liveIds || !liveIds.length) return state;
+  const live = new Set(liveIds);
+  const tags = {};
+  for (const [b, list] of Object.entries(state.tags)) if (live.has(b)) tags[b] = list;
+  return { ...state, tags };
+}
+
+// 지워졌다고 확인된 봇의 라벨만 지운다.
+function labelsDropBots(state, gone) {
+  if (!gone || !gone.size) return state;
+  const tags = {};
+  for (const [b, list] of Object.entries(state.tags)) if (!gone.has(b)) tags[b] = list;
+  return { ...state, tags };
+}
+
+// 자동 라벨 「새로 받음」: 폴더 마스터가 처음 본 지 7일이 안 됐고, 아직 대화하지 않은 봇.
+// seen = { id: 처음 본 시각 } (첫 실행 때 이미 있던 봇은 0). 대화 여부를 모르면(이름 미확인) 넣지 않는다.
+function isNewBot(id, seen, chars, now = Date.now()) {
+  const at = seen && seen[id];
+  if (!at || now - at > LABEL_NEW_DAYS * DAY_MS) return false;
+  const c = chars.get(id);
+  return !!c && !c.last;
+}
+
+// 처음 보는 봇을 기록한다. 기록이 비어 있으면(첫 실행) 지금 있는 봇은 모두 0(오래된 봇)으로 둔다.
+function seenUpdate(seen, ids, now = Date.now()) {
+  const first = !seen || !Object.keys(seen).length;
+  const out = {};
+  for (const id of ids) out[id] = seen && id in seen ? seen[id] : first ? 0 : now;
+  return out;
+}
+
+// ── 최근 대화 ──
+
+// tracked = [{ id, at }] (폴더 마스터가 본 「봇을 연 시각」), chars 의 last = RisuAI 마지막 대화 시각.
+// 둘 중 늦은 시각으로 줄 세운다. live 에 없는 봇·exclude 는 뺀다.
+function recentRank(live, tracked, chars, { count = 8, exclude = [] } = {}) {
+  const liveSet = live ? new Set(live) : null;
+  const skip = new Set(exclude);
+  const at = new Map();
+  for (const t of tracked || []) if (t && typeof t.id === 'string') at.set(t.id, Math.max(at.get(t.id) || 0, Number(t.at) || 0));
+  for (const [id, c] of chars) if (c && c.last) at.set(id, Math.max(at.get(id) || 0, c.last));
+  return [...at].filter(([id, t]) => t > 0 && (!liveSet || liveSet.has(id)) && !skip.has(id)).sort((a, b) => b[1] - a[1]).slice(0, count).map(([id]) => id);
+}
+
+function recentTrack(list, id, now = Date.now(), cap = 40) {
+  return [{ id, at: now }, ...(list || []).filter((t) => t && t.id !== id)].slice(0, cap);
+}
+
+// ── 이름 다듬기 ──
+
+function normName(name) {
+  return String(name || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// 중복 비교용: 버전 표기·사본 표시·괄호 꼬리를 떼고 공백·기호를 지운다.
+function dupKey(name) {
+  let n = normName(name);
+  n = n.replace(/[\s_-]*(\(|\[|【)?\s*(사본|복사본|copy|복제)\s*(\d+)?\s*(\)|\]|】)?\s*$/i, '');
+  n = n.replace(/[\s_-]*(\(|\[)?\s*v?\d+(\.\d+){1,3}[a-z]?\s*(\)|\])?\s*$/i, '');
+  n = n.replace(/[\s_-]*(\(|\[)\s*v\d+\s*(\)|\])\s*$/i, '').replace(/\s+v\d+\s*$/i, '');
+  n = n.replace(/[\s\p{P}\p{S}]+/gu, '');
+  return n;
+}
+
+// 이름이 같거나 비슷한(dupKey 가 같은) 봇 묶음. ignore = 무시한 dupKey 목록.
+// 결과: [{ key, same, ids }] — same = 이름이 글자 그대로 모두 같음.
+function findDuplicates(ids, chars, ignore = []) {
+  const skip = new Set(ignore);
+  const groups = new Map();
+  for (const id of new Set(ids)) {
+    const c = chars.get(id);
+    if (!c || !c.name) continue;
+    const key = dupKey(c.name);
+    if (!key || skip.has(key)) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(id);
+  }
+  const out = [];
+  for (const [key, list] of groups) {
+    if (list.length < 2) continue;
+    const names = new Set(list.map((id) => normName(chars.get(id).name)));
+    const sorted = [...list].sort((a, b) => (chars.get(b).last || 0) - (chars.get(a).last || 0));
+    out.push({ key, same: names.size === 1, ids: sorted });
+  }
+  return out.sort((a, b) => b.ids.length - a.ids.length || a.key.localeCompare(b.key));
+}
+
+// ── 정리 마법사 ──
+
+const NAME_SPLIT = /[\s|:·/_~]+/;
+// 이름 앞에 흔히 오는 낱말은 묶음 열쇠로 쓰지 않는다.
+const NAME_STOP = new Set(['the', 'a', 'an']);
+const BRACKET_HEAD = /^\s*[[【(（<〈「『]\s*([^\]】)）>〉」』]{1,20}?)\s*[\]】)）>〉」』]/;
+
+// 이름에서 묶음 열쇠를 뽑는다. 앞 괄호([동방] 레이무 → 동방), 아니면 첫 낱말(버전 표기 제외).
+function nameKey(name) {
+  const raw = String(name || '').normalize('NFKC').trim();
+  const head = BRACKET_HEAD.exec(raw);
+  if (head) {
+    const k = head[1].trim();
+    return k.length >= 2 ? k : '';
+  }
+  // 이모지·기호뿐인 낱말(🎮, —)과 버전 표기는 건너뛴다.
+  for (const w of raw.split(NAME_SPLIT)) {
+    const k = w.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, '');
+    if ([...k].length >= 2 && !/^v?\d+(\.\d+)*$/i.test(k) && !NAME_STOP.has(k.toLowerCase())) return k;
+  }
+  return '';
+}
+
+// 열쇠와 맞는 있는 폴더. 이름이 같거나, 낱말 하나가 같거나, 한글·한자처럼 띄어 쓰지 않는 이름이면 앞부분이 같을 때
+// (동방 → 동방환유기). 영어는 낱말 단위로만 본다(The → Theater 처럼 엉뚱하게 붙지 않게).
+function folderMatch(folders, title) {
+  const t = normName(title).replace(/[\s\p{P}\p{S}]+/gu, '');
+  if ([...t].length < 2) return null;
+  const cjk = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(t);
+  for (const f of folders) {
+    const words = normName(f.name).split(/[\s\p{P}\p{S}]+/u).filter(Boolean);
+    const n = words.join('');
+    if (!n) continue;
+    if (n === t || words.includes(t) || (cjk && [...n].length >= 2 && (n.startsWith(t) || t.startsWith(n)))) return f;
+  }
+  return null;
+}
+
+// rootIds(폴더 밖 봇)를 묶어 폴더를 제안한다. mode = 'name' | 'creator' | 'tag'.
+// 결과: [{ key, title, ids, folderId, why }] — folderId 가 있으면 있는 폴더에 넣는다.
+function suggestGroups(rootIds, chars, folders, mode) {
+  const known = rootIds.filter((id) => chars.get(id)?.name);
+  const buckets = new Map();
+  const put = (key, title, id) => {
+    const k = normName(key);
+    if (!k) return;
+    if (!buckets.has(k)) buckets.set(k, { title, ids: [] });
+    const b = buckets.get(k);
+    if (!b.ids.includes(id)) b.ids.push(id);
+  };
+  if (mode === 'creator') {
+    for (const id of known) { const cr = String(chars.get(id).creator || '').trim(); if (cr) put(cr, cr, id); }
+  } else if (mode === 'tag') {
+    const count = new Map();
+    for (const id of known) for (const t of new Set((chars.get(id).tags || []).map((x) => String(x).trim()).filter(Boolean))) count.set(normName(t), (count.get(normName(t)) || 0) + 1);
+    const tags = [...count].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const taken = new Set();
+    for (const [tag] of tags) {
+      const ids = known.filter((id) => !taken.has(id) && (chars.get(id).tags || []).some((x) => normName(x) === tag));
+      if (ids.length < 2) continue;
+      const shown = (chars.get(ids[0]).tags || []).find((x) => normName(x) === tag) || tag;
+      for (const id of ids) { taken.add(id); put(tag, String(shown).trim(), id); }
+    }
+  } else {
+    for (const id of known) { const k = nameKey(chars.get(id).name); if (k) put(k, k, id); }
+  }
+  const why = { name: (t) => `이름 「${t}」`, creator: (t) => `제작자 ${t}`, tag: (t) => `태그 「${t}」` }[mode] || ((t) => t);
+  const out = [];
+  for (const [key, b] of buckets) {
+    const f = folderMatch(folders, b.title);
+    if (b.ids.length < 2 && !f) continue;
+    out.push({ key, title: f ? f.name : b.title, ids: b.ids, folderId: f ? f.id : null, why: why(b.title) });
+  }
+  return out.sort((a, b) => b.ids.length - a.ids.length || a.title.localeCompare(b.title, 'ko'));
+}
+
+// ── 배치 기록 ──
+
+// snap 배치로 되돌린다. 지금 순서에 없는 봇(그 사이 지워진 봇)은 빼고, snap 에 없는 봇(그 사이 들어온 봇)은
+// 폴더 밖 맨 뒤에 둔다. 폴더 이름·색·그림은 snap 것을 쓴다. 빈 폴더는 남기지 않는다.
+function restoreOrder(current, snap) {
+  const live = new Set(orderBotIds(current));
+  const used = new Set();
+  const out = [];
+  for (const item of cloneOrder(snap)) {
+    if (typeof item === 'string') {
+      if (live.has(item) && !used.has(item)) { used.add(item); out.push(item); }
+    } else if (isFolder(item)) {
+      const data = item.data.filter((id) => live.has(id) && !used.has(id) && (used.add(id), true));
+      if (data.length) out.push({ ...item, data });
+    }
+  }
+  for (const id of orderBotIds(current)) if (!used.has(id)) { used.add(id); out.push(id); }
+  return out;
+}
+
+// a → b 에서 바뀐 것 요약.
+function diffOrders(a, b) {
+  const fa = new Map(cloneOrder(a).filter(isFolder).map((f) => [f.id, f]));
+  const fb = new Map(cloneOrder(b).filter(isFolder).map((f) => [f.id, f]));
+  const where = (order) => {
+    const m = new Map();
+    for (const item of cloneOrder(order)) {
+      if (typeof item === 'string') { if (!m.has(item)) m.set(item, ''); } else if (isFolder(item)) for (const id of item.data) if (!m.has(id)) m.set(id, item.id);
+    }
+    return m;
+  };
+  const wa = where(a);
+  const wb = where(b);
+  let moved = 0;
+  for (const [id, at] of wb) if (wa.has(id) && wa.get(id) !== at) moved++;
+  return {
+    foldersAdded: [...fb.values()].filter((f) => !fa.has(f.id)).map((f) => f.name || '이름 없음'),
+    foldersRemoved: [...fa.values()].filter((f) => !fb.has(f.id)).map((f) => f.name || '이름 없음'),
+    renamed: [...fb.values()].filter((f) => fa.has(f.id) && (fa.get(f.id).name || '') !== (f.name || '')).map((f) => [fa.get(f.id).name || '이름 없음', f.name || '이름 없음']),
+    moved,
+    botsAdded: [...wb.keys()].filter((id) => !wa.has(id)).length,
+    botsRemoved: [...wa.keys()].filter((id) => !wb.has(id)).length,
+  };
+}
+
+function sameOrder(a, b) {
+  return JSON.stringify(cloneOrder(a)) === JSON.stringify(cloneOrder(b));
+}
+
+// ── 보관함·통계 ──
+
+// 오래 대화하지 않은 봇(마지막 대화 시각을 아는 봇만). finished = 「엔딩 봄」 같은 라벨이 붙어 날짜와 상관없이 넣을 봇.
+// 결과: [{ id, days, finished }] 오래된 순(finished 먼저).
+function archiveCandidates(order, chars, { days = 60, archiveId = '', keep = [], finished = [], now = Date.now() } = {}) {
+  const skip = new Set(keep);
+  const fin = new Set(finished);
+  const inArchive = new Set(archiveId ? (order.find((x) => isFolder(x) && x.id === archiveId)?.data || []) : []);
+  const out = [];
+  for (const id of new Set(orderBotIds(order))) {
+    if (skip.has(id) || inArchive.has(id)) continue;
+    const c = chars.get(id);
+    if (!c) continue;
+    const age = c.last ? Math.floor((now - c.last) / DAY_MS) : null;
+    if (fin.has(id)) out.push({ id, days: age, finished: true });
+    else if (age !== null && age >= days) out.push({ id, days: age, finished: false });
+  }
+  return out.sort((a, b) => (b.finished - a.finished) || (b.days ?? -1) - (a.days ?? -1));
+}
+
+// 폴더별 통계. active = 최근 30일 안에 대화한 봇.
+function folderStats(order, chars, { now = Date.now(), activeDays = 30 } = {}) {
+  const act = (id) => { const c = chars.get(id); return !!(c && c.last && now - c.last <= activeDays * DAY_MS); };
+  const rows = [];
+  const root = [];
+  for (const item of cloneOrder(order)) {
+    if (isFolder(item)) rows.push({ id: item.id, name: item.name || '이름 없음', color: item.color, total: item.data.length, active: item.data.filter(act).length });
+    else if (typeof item === 'string') root.push(item);
+  }
+  const all = [...new Set(orderBotIds(order))];
+  let oldest = null;
+  for (const id of all) { const c = chars.get(id); if (c && c.last && (!oldest || c.last < oldest.last)) oldest = { id, last: c.last }; }
+  const top = rows.filter((r) => r.active).sort((a, b) => b.active - a.active)[0] || null;
+  return {
+    total: all.length,
+    folders: rows.length,
+    active: all.filter(act).length,
+    root: { total: root.length, active: root.filter(act).length },
+    known: all.filter((id) => chars.has(id)).length,
+    rows,
+    top,
+    oldest,
+  };
+}
+
+// ── 기타 설정(서버) ──
+
+function plusNorm(v) {
+  const o = v && typeof v === 'object' ? v : {};
+  const r = o.recent && typeof o.recent === 'object' ? o.recent : {};
+  const l = o.labelFolder && typeof o.labelFolder === 'object' ? o.labelFolder : {};
+  const a = o.archive && typeof o.archive === 'object' ? o.archive : {};
+  const str = (x, n = 300) => (typeof x === 'string' ? x.slice(0, n) : '');
+  return {
+    recent: {
+      on: r.on === true,
+      count: [5, 8, 12].includes(r.count) ? r.count : 8,
+      noStars: r.noStars === true,
+      first: r.first === 'favorites' ? 'favorites' : 'recent',
+      name: str(r.name, 80),
+      imgFile: str(r.imgFile),
+    },
+    labelFolder: { lid: str(l.lid, 40), name: str(l.name, 80), imgFile: str(l.imgFile) },
+    archive: {
+      on: a.on !== false,
+      days: [30, 60, 90].includes(a.days) ? a.days : 60,
+      folderId: str(a.folderId, 80),
+      snooze: Number(a.snooze) > 0 ? Number(a.snooze) : 0,
+    },
+    dupIgnore: Array.isArray(o.dupIgnore) ? [...new Set(o.dupIgnore.filter((x) => typeof x === 'string' && x))].slice(-200) : [],
+  };
+}
+
+// op = { k: 'recent'|'labelFolder'|'archive', set: {...} } | { k: 'dupIgnore', add: [...] }
+function plusApply(state, op) {
+  const s = plusNorm(state);
+  if (op.k === 'dupIgnore') s.dupIgnore = [...s.dupIgnore, ...(op.add || [])];
+  else if (s[op.k] && op.set) s[op.k] = { ...s[op.k], ...op.set };
+  return plusNorm(s);
+}
+
+function recentNorm(v) {
+  const list = Array.isArray(v?.list) ? v.list.filter((t) => t && typeof t.id === 'string' && Number(t.at) > 0).map((t) => ({ id: t.id, at: Number(t.at) })) : [];
+  return { list: list.slice(0, 40) };
+}
+
+// op = { id, at }
+function recentApply(state, op) {
+  return { list: recentTrack(recentNorm(state).list, op.id, op.at) };
 }
 
 // ── src/core/store.js ──
@@ -464,6 +881,9 @@ function rawFor(base, raw) {
 function summarizeCharacter(c) {
   const assets = Array.isArray(c.additionalAssets) ? c.additionalAssets.length : 0;
   const modules = Array.isArray(c.modules) ? c.modules.length : 0;
+  const creator = typeof c.creator === 'string' && c.creator.trim() ? c.creator.trim() : typeof c.additionalData?.creator === 'string' ? c.additionalData.creator.trim() : '';
+  const tagSrc = Array.isArray(c.tags) && c.tags.length ? c.tags : Array.isArray(c.additionalData?.tag) ? c.additionalData.tag : [];
+  const tags = tagSrc.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 40)).slice(0, 12);
   return {
     id: c.chaId,
     name: typeof c.name === 'string' && c.name ? c.name : '이름 없음',
@@ -472,6 +892,8 @@ function summarizeCharacter(c) {
     last: Number(c.lastInteraction) || 0,
     assets,
     modules,
+    creator: creator.slice(0, 60),
+    tags,
   };
 }
 
@@ -480,6 +902,7 @@ const saver = {
   history: [],
   pending: 0,
   onBusy: () => {},
+  onCommitted: () => {},
 
   run(task) {
     const job = this.queue.then(task);
@@ -544,6 +967,7 @@ const saver = {
         }
         this.history.push({ label, before, after: next });
         if (this.history.length > HISTORY_LIMIT) this.history.shift();
+        this.onCommitted(label, next);
         return next;
       }
       throw new Error('다른 곳에서 순서가 계속 바뀌고 있어 저장하지 않았습니다. 잠시 뒤 다시 해 주세요');
@@ -566,6 +990,7 @@ const saver = {
         throw new Error('그 뒤에 다른 곳에서 순서가 바뀌어 되돌릴 수 없습니다');
       }
       this.history.pop();
+      if (result === 'ok') this.onCommitted(`되돌림: ${entry.label}`, entry.before);
       if (result === 'drift') this.warning = '되돌린 직후 다른 곳에서 순서가 바뀌었습니다. 목록을 확인해 주세요';
       return entry;
     });
@@ -637,6 +1062,63 @@ const avatars = {
     this.cache.clear();
   },
 };
+
+// ── src/core/syncstore.js ──
+// 서버 플러그인 저장소에 두는 작은 기록(기기끼리 같이 씀). 쓸 때는 서버 값을 다시 읽어 이번 변경만 얹는다.
+// 해적판은 setItem 이 늦게 반영되어 바로 읽으면 옛 값이 오므로, 반영되지 않은 내 변경을 기억해 읽을 때마다 다시 얹는다.
+// 쓸 때마다 값에 쓰기 표시(_w)를 붙이고, 서버 값의 표시가 어느 쓰기인지로 반영 여부를 본다(값이 우연히 같아도 헷갈리지 않게).
+// 그 쓰기와 그보다 앞선 쓰기는 반영된 것으로 지우고, 뒤의 변경만 차례대로 다시 얹는다.
+
+const SYNC_PENDING_MS = 60000;
+
+function createSyncStore(key, norm, apply, prune) {
+  const st = {
+    key,
+    state: norm(null),
+    saved: null,
+    pending: [],
+    queue: Promise.resolve(),
+
+    async read() {
+      const saved = await Risuai.pluginStorage.getItem(key);
+      let state = norm(saved);
+      const now = Date.now();
+      const mark = saved && typeof saved === 'object' ? saved._w : null;
+      let seen = -1;
+      if (mark) st.pending.forEach((p, i) => { if (p.mark === mark) seen = i; });
+      if (seen >= 0) st.pending.splice(0, seen + 1);
+      while (st.pending.length && now - st.pending[0].at > SYNC_PENDING_MS) st.pending.shift();
+      for (const { op } of st.pending) state = apply(state, op);
+      return { saved, state };
+    },
+
+    async load() {
+      try {
+        const { saved, state } = await st.read();
+        st.saved = saved;
+        st.state = state;
+      } catch {}
+      return st.state;
+    },
+
+    // 화면은 바로 바꾸고 저장은 줄 세워 한다. after() 는 저장 뒤에 부른다.
+    change(op, after) {
+      st.state = apply(st.state, op);
+      const job = st.queue.then(async () => {
+        const { state } = await st.read();
+        const next = norm(prune ? prune(apply(state, op)) : apply(state, op));
+        const mark = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        st.pending.push({ op, at: Date.now(), mark });
+        await Risuai.pluginStorage.setItem(key, { ...next, _w: mark });
+        st.state = next;
+        if (after) await after();
+      });
+      st.queue = job.catch(() => {});
+      return job;
+    },
+  };
+  return st;
+}
 
 // ── src/core/roster.js ──
 // 봇 이름·그림 공급. 플러그인 API(v3)만 쓰며 서버에 따라 길을 고른다.
@@ -1266,6 +1748,15 @@ const ICON_PATHS = {
   puzzle: '<path d="M10 4h4v2.5a1.5 1.5 0 0 0 3 0V4h3v6h-2.5a1.5 1.5 0 0 0 0 3H20v7h-6v-2.5a1.5 1.5 0 0 0-3 0V20H4v-7h2.5a1.5 1.5 0 0 0 0-3H4V4z"/>',
   users: '<circle cx="9" cy="8.5" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M21 20a6 6 0 0 0-3.5-5.5"/>',
   select: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  tag: '<path d="M3.5 12.2V5a1.5 1.5 0 0 1 1.5-1.5h7.2a1.5 1.5 0 0 1 1.1.4l7.3 7.3a1.5 1.5 0 0 1 0 2.1l-7.2 7.2a1.5 1.5 0 0 1-2.1 0l-7.4-7.2a1.5 1.5 0 0 1-.4-1.1z"/><circle cx="8.3" cy="8.3" r="1.5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  history: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M12 8v4l2.8 1.8"/>',
+  wand: '<path d="m4 20 11-11"/><path d="m13 7 4 4"/><path d="M17.5 3v3M16 4.5h3M20 9v2.5M18.7 10.2h2.6M9.5 3.5v2M8.5 4.5h2"/>',
+  chart: '<path d="M4 20h16"/><rect x="5.5" y="11" width="3" height="6.5" rx="1"/><rect x="10.5" y="6.5" width="3" height="11" rx="1"/><rect x="15.5" y="13.5" width="3" height="4" rx="1"/>',
+  box: '<path d="M3.5 8 12 4l8.5 4-8.5 4z"/><path d="M3.5 8v8.5L12 20.5l8.5-4V8"/><path d="M12 12v8.5"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
+  command: '<path d="M9 9h6v6H9z"/><path d="M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9zM15 9V6.5A2.5 2.5 0 1 1 17.5 9H15zM9 15v2.5A2.5 2.5 0 1 1 6.5 15H9zM15 15v2.5a2.5 2.5 0 1 0 2.5-2.5H15z"/>',
+  sparkle: '<path d="M12 3.5 13.8 10l6.7 2-6.7 2L12 20.5 10.2 14l-6.7-2 6.7-2z"/>',
 };
 
 function icon(name, cls = '') {
@@ -1709,6 +2200,9 @@ function openModal(html, setup) {
     modal.dispatchEvent(new CustomEvent('fm-close', { detail: value }));
   };
   const onKey = (e) => {
+    // 창 위에 창이 열려 있으면 맨 위 창만 키를 받는다(Esc 한 번에 둘 다 닫히지 않게).
+    const backs = document.querySelectorAll('.fm-modal-back');
+    if (backs[backs.length - 1] !== back) return;
     if (e.key === 'Escape') { e.stopPropagation(); close(null); return; }
     if (e.key !== 'Tab') return;
     const items = [...modal.querySelectorAll('button:not([disabled]):not([hidden]), input:not([hidden]), [tabindex="0"]')].filter((el) => el.offsetParent !== null);
@@ -1725,6 +2219,23 @@ function openModal(html, setup) {
   setup(modal, close);
   if (!modal.contains(document.activeElement)) setTimeout(() => { if (!modal.contains(document.activeElement)) modal.querySelector('.primary, button:not([disabled])')?.focus(); }, 0);
   return new Promise((resolve) => modal.addEventListener('fm-close', (e) => resolve(e.detail)));
+}
+
+// 목록을 다시 그려도 키보드 포커스·스크롤을 지킨다. 포커스는 같은 data-* 속성을 가진 요소로 돌려준다.
+function rerender(box, html) {
+  const a = document.activeElement;
+  let sel = null;
+  if (a && box.contains(a)) {
+    const attrs = [...a.attributes].filter((x) => x.name.startsWith('data-'));
+    if (attrs.length) sel = attrs.map((x) => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
+  }
+  const top = box.scrollTop;
+  box.innerHTML = html;
+  box.scrollTop = top;
+  if (!sel) return;
+  // 포커스가 있던 줄이 사라졌으면 목록의 첫 버튼, 그것도 없으면 창의 닫기·확인 버튼으로.
+  const next = box.querySelector(sel) || box.querySelector('button:not([disabled])') || box.closest('.fm-modal')?.querySelector('[data-x], .primary');
+  next?.focus({ preventScroll: true });
 }
 
 function askText(title, { value = '', placeholder = '', confirm = '확인', desc = '' } = {}) {
@@ -2135,6 +2646,7 @@ const PLUGIN_NAME = 'risu_folder_master';
 const fav = { stars: [], pins: [], folder: favFolderNorm(null), sort: 'added', fold: false };
 let favQueue = Promise.resolve();
 let favPollTimer = null;
+let favPollIdle = false;
 // 해적판은 setItem 이 서버에 늦게 반영되어 바로 읽으면 옛 값이 온다. 아직 반영 안 된 내 변경을 기억해 읽을 때마다 다시 얹는다.
 const favPending = [];
 const FAV_PENDING_MS = 60000;
@@ -2157,8 +2669,9 @@ function favRecord(v) {
   return { stars: favNorm(o.stars), pins: favNorm(o.pins), folder: favFolderNorm(o.folder) };
 }
 
-function shortcutOpts() {
-  return { on: fav.folder.on, stars: fav.stars, name: fav.folder.name, imgFile: fav.folder.imgFile };
+// 즐겨찾기 바로가기 폴더 한 칸(sidebarplus.js 의 shortcutOpts 가 최근 대화·라벨 폴더와 함께 모은다).
+function favShortcutItem() {
+  return fav.folder.on ? { id: SHORTCUT_ID, name: fav.folder.name || SHORTCUT_NAME, color: 'yellow', imgFile: fav.folder.imgFile, ids: fav.stars } : null;
 }
 
 function favReflected(state, op) {
@@ -2216,41 +2729,52 @@ function favChange(op) {
     favPending.push({ op, at: Date.now() });
     await Risuai.pluginStorage.setItem(FAV_KEY, next);
     Object.assign(fav, next);
-    if (shortcutState.dbOk && (fav.folder.on || op.key === 'folder')) await saver.syncShortcut();
-    if (op.key === 'folder') await shortcutGuard();
+    if (shortcutState.dbOk && (shortcutAnyOn() || op.key === 'folder')) await saver.syncShortcut();
+    await shortcutGuard();
   }).catch((err) => toast('즐겨찾기를 저장하지 못했습니다: ' + errorText(err), { error: true })).then(() => render(true));
   return favQueue;
 }
 
 // ── 사이드바 바로가기 폴더 ──
 
-// 사이드바에서 바로가기 폴더(맨 위 폴더)를 끌 수 없게 한다. Chromium 계열만 막히고, 오른쪽 클릭 메뉴(이름·색·그림)는
+// 사이드바에서 바로가기 폴더(맨 위 폴더들)를 끌 수 없게 한다. Chromium 계열만 막히고, 오른쪽 클릭 메뉴(이름·색·그림)는
 // 막을 수 없으므로 그 밖의 손질은 syncShortcut 이 되돌린다. CSS 는 DOMPurify 를 거치므로 < > & 를 쓰지 않는다.
-function shortcutGuardCSS() {
+function shortcutGuardCSS(count = 1) {
   return SIDEBAR_SCROLL.split(',').map((sel) => {
-    const top = `${sel.trim()} .group:not(.z-10):nth-child(1 of .group)`;
+    const top = `${sel.trim()} .group:not(.z-10):nth-child(-n+${count} of .group)`;
     return `${top},${top} *,${top} + .rounded-lg *{-webkit-user-drag:none!important}\n${top} + .rounded-lg .h-4{pointer-events:none!important}`;
   }).join('\n');
 }
 
 async function shortcutGuard() {
-  const on = fav.folder.on && fav.stars.length > 0;
+  const count = shortcutCount();
   try {
-    const doc = on ? await Risuai.getRootDocument() : rootDoc;
+    const doc = count ? await Risuai.getRootDocument() : rootDoc;
     if (!doc) return;
     rootDoc = doc;
-    await setRootStyle(doc, SHORTCUT_GUARD_XID, on ? shortcutGuardCSS() : '');
+    await setRootStyle(doc, SHORTCUT_GUARD_XID, count ? shortcutGuardCSS(count) : '');
   } catch {}
 }
 
 // 창을 한 번 연 뒤(DB 권한을 이미 받은 뒤)에만 돈다. 다른 기기에서 바꾼 즐겨찾기도 다시 읽어 맞춘다.
 function shortcutPollStart() {
-  if (favPollTimer || !fav.folder.on || !shortcutState.dbOk) return;
+  // 모두 꺼져 있어도 쉬는 상태로 시작한다(다른 기기에서 켜면 알아채도록). 데이터 권한을 받은 뒤에만.
+  if (favPollTimer || !shortcutState.dbOk) return;
+  favPollIdle = !shortcutAnyOn();
+  let idle = 0;
   favPollTimer = setInterval(async () => {
     try {
+      // 모두 꺼져 있으면 설정만 가끔(약 30초마다) 다시 읽는다. 다른 기기에서 다시 켜면 여기서 알아챈다.
+      if (favPollIdle && ++idle % 8) return;
       Object.assign(fav, (await favRead()).state);
-      if (!fav.folder.on) { shortcutPollStop(); await saver.syncShortcut(); return; }
-      if (await saver.syncShortcut() === 'written' && ui.app) { ui.order = await readOrder(); render(true); }
+      await shortcutReloadStores();
+      recentWatchSync();
+      if (!shortcutAnyOn()) {
+        if (!favPollIdle) { favPollIdle = true; await saver.syncShortcut(); await shortcutGuard(); }
+        return;
+      }
+      if (favPollIdle) { favPollIdle = false; idle = 0; }
+      if (await saver.syncShortcut() === 'written') { await shortcutGuard(); if (ui.app) { ui.order = await readOrder(); render(true); } }
     } catch {}
   }, FAV_POLL_MS);
 }
@@ -2258,11 +2782,14 @@ function shortcutPollStart() {
 function shortcutPollStop() {
   clearInterval(favPollTimer);
   favPollTimer = null;
+  favPollIdle = false;
 }
 
 async function shortcutStartup() {
   await favLoad();
-  if (fav.folder.on) await shortcutGuard();
+  await shortcutReloadStores();
+  if (shortcutAnyOn()) await shortcutGuard();
+  recentWatchStart();
 }
 
 // 플러그인을 지우거나 끌 때 바로가기 폴더를 지운다. RisuAI는 목록에서 먼저 빼고 플러그인을 다시 불러오므로,
@@ -2270,7 +2797,8 @@ async function shortcutStartup() {
 // 호스트가 정리를 1초까지만 기다리므로 권한 창이 필요하면(3일 지남) 정리하지 못할 수 있다. 확실히 지우려면 먼저 옵션을 끈다.
 async function shortcutUnloadCleanup() {
   shortcutPollStop();
-  if (!fav.folder.on) return;
+  recentWatchStop();
+  if (!shortcutAnyOn()) return;
   const db = await Risuai.getDatabase(['plugins', 'characterOrder']);
   if (!db) return;
   const me = (Array.isArray(db.plugins) ? db.plugins : []).find((p) => p && p.name === PLUGIN_NAME);
@@ -2283,7 +2811,7 @@ async function shortcutUnloadCleanup() {
 async function shortcutToggle(on) {
   if (on && !fav.stars.length) toast('즐겨찾는 봇이 생기면 사이드바 맨 위에 폴더가 생깁니다');
   await favChange({ key: 'folder', set: { on } });
-  if (on) shortcutPollStart(); else shortcutPollStop();
+  if (shortcutAnyOn()) shortcutPollStart(); // 모두 끄면 감시는 저절로 쉬는 상태가 된다(다른 기기에서 다시 켜면 알아챔)
   toast(on ? '사이드바 맨 위에 즐겨찾기 폴더를 만들었습니다' : '사이드바 즐겨찾기 폴더를 지웠습니다');
 }
 
@@ -2476,6 +3004,1307 @@ const FAV_CSS = `
 @media (max-width:560px){.fm-fav-sort button{padding:5px 7px}}
 `;
 
+// ── src/ui/sidebarplus.js ──
+// 사이드바 바로가기 폴더 모음(최근 대화·즐겨찾기·라벨)과 「최근 대화」 추적.
+// 최근 대화: 4초마다 지금 열린 봇 번호만 확인하고(권한 필요 없음), 바뀌면 그 봇을 「최근에 연 봇」 기록 맨 앞에 둔다.
+// 사이드바 폴더에 쓰려면 데이터 권한이 필요하다. 이번 세션에 권한을 받지 않았으면 봇을 바꿀 때 한 번 요청하고,
+// 거절되면 이번 세션에는 다시 묻지 않는다(폴더 마스터 창을 열면 다시 맞춘다).
+
+const PLUS_KEY_SERVER = 'risuFolderMaster.plus';
+const RECENT_KEY = 'risuFolderMaster.recent';
+const RECENT_POLL_MS = 4000;
+const plusStore = createSyncStore(PLUS_KEY_SERVER, plusNorm, plusApply);
+const recentStore = createSyncStore(RECENT_KEY, recentNorm, recentApply);
+const recentWatch = { timer: null, lastIdx: null, busy: false, denied: false };
+
+function labelFolderDef() {
+  const lid = plusStore.state.labelFolder.lid;
+  return lid ? labelStore.state.defs.find((d) => d.id === lid) || null : null;
+}
+
+function recentIds() {
+  const r = plusStore.state.recent;
+  const live = shortcutState.last ? orderBotIds(shortcutState.last) : null;
+  return recentRank(live, recentStore.state.list, roster.chars, { count: r.count, exclude: r.noStars ? fav.stars : [] });
+}
+
+function labelFolderIds() {
+  const def = labelFolderDef();
+  if (!def) return [];
+  const tagged = Object.entries(labelStore.state.tags).filter(([, l]) => l.includes(def.id)).map(([b]) => b);
+  if (!shortcutState.last) return tagged;
+  const set = new Set(tagged);
+  return orderBotIds(shortcutState.last).filter((id) => set.has(id));
+}
+
+// 사이드바 맨 위에 둘 바로가기 폴더들(위에서부터). store.js 의 rawFor 가 부른다.
+function shortcutOpts() {
+  const r = plusStore.state.recent;
+  const recent = r.on ? { id: RECENT_ID, name: r.name || RECENT_NAME, color: 'blue', imgFile: r.imgFile, ids: recentIds() } : null;
+  const favItem = favShortcutItem();
+  const list = r.first === 'favorites' ? [favItem, recent] : [recent, favItem];
+  const def = labelFolderDef();
+  if (def) {
+    const lf = plusStore.state.labelFolder;
+    list.push({ id: LABEL_FOLDER_ID, name: lf.name || `${def.emoji ? def.emoji + ' ' : ''}${def.name}`, color: def.color, imgFile: lf.imgFile, ids: labelFolderIds() });
+  }
+  return list.filter(Boolean);
+}
+
+function shortcutAnyOn() {
+  return fav.folder.on || plusStore.state.recent.on || !!labelFolderDef();
+}
+
+// 지금 사이드바 맨 위에 생길 바로가기 폴더 수(끌기 막기 CSS 용).
+function shortcutCount() {
+  return shortcutOpts().filter((sc) => {
+    if (!shortcutState.last) return sc.ids.length > 0;
+    const live = new Set(orderBotIds(shortcutState.last));
+    return sc.ids.some((id) => live.has(id));
+  }).length;
+}
+
+async function shortcutReloadStores() {
+  await Promise.all([plusStore.load(), recentStore.load(), labelStore.load()]);
+}
+
+// ── 최근 대화 추적 ──
+
+function recentWatchStart() {
+  if (recentWatch.timer || !plusStore.state.recent.on) return;
+  // 마지막 대화 시각(기기에 저장된 봇 요약)도 순위에 쓴다.
+  if (!roster.store) rosterLoadCache().catch(() => {});
+  recentWatch.timer = setInterval(recentTick, RECENT_POLL_MS);
+  recentTick();
+}
+
+// 다른 기기에서 켜고 끈 것까지 맞춘다.
+function recentWatchSync() {
+  if (plusStore.state.recent.on) recentWatchStart(); else recentWatchStop();
+}
+
+function recentWatchStop() {
+  clearInterval(recentWatch.timer);
+  recentWatch.timer = null;
+  recentWatch.lastIdx = null;
+}
+
+async function recentTick() {
+  if (recentWatch.busy) return;
+  if (!plusStore.state.recent.on) { recentWatchStop(); return; }
+  recentWatch.busy = true;
+  try {
+    let idx;
+    try { idx = await Risuai.getCurrentCharacterIndex(); } catch { recentWatchStop(); return; }
+    if (typeof idx !== 'number' || idx < 0 || idx === recentWatch.lastIdx) return;
+    recentWatch.lastIdx = idx;
+    const c = await Risuai.getCharacter();
+    if (!c || typeof c.chaId !== 'string' || !c.chaId || !plusStore.state.recent.on) return;
+    if (recentStore.state.list[0]?.id === c.chaId) return;
+    await recentStore.change({ id: c.chaId, at: Date.now() });
+    await recentSidebarSync();
+  } catch {} finally { recentWatch.busy = false; }
+}
+
+async function recentSidebarSync() {
+  if (!plusStore.state.recent.on || recentWatch.denied) return;
+  try {
+    if (await saver.syncShortcut() === 'written') {
+      await shortcutGuard();
+      if (ui.app) { ui.order = await readOrder(); render(true); }
+    }
+    shortcutPollStart();
+  } catch (err) {
+    if (/권한/.test(errorText(err))) recentWatch.denied = true;
+  }
+}
+
+// ── 설정 창의 바로가기 폴더 칸 ──
+
+function plusSidebarSettingsHtml(d) {
+  const seg = (attr, items, cur) => `<div class="fm-fav-sort" role="group">${items.map(([v, t]) => `<button ${attr}="${v}" class="${String(cur) === String(v) ? 'on' : ''}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
+  const labels = labelStore.state.defs;
+  return `<span class="fm-label">사이드바 바로가기 폴더</span>
+     <p class="fm-note">RisuAI 사이드바 맨 위에 봇의 바로가기 폴더를 둡니다. 봇은 복사되지 않고 원래 폴더에도 그대로 있습니다. 이 폴더들은 폴더 마스터에서만 고칩니다.</p>
+     <div class="fm-set-row"><div><b>⭐ 즐겨찾기 폴더</b><small>즐겨찾는 봇을 사이드바 맨 위에</small></div>${favSwitchHtml(d.fav, 'data-sw="fav"', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
+     <div class="fm-set-row"><div><b>🕘 최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다).</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
+     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>보여 줄 개수</b></div>${seg('data-rcount', [[5, '5'], [8, '8'], [12, '12']], d.count)}</div>
+     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>즐겨찾기 봇은 빼기</b><small>두 폴더에 같은 봇이 겹치지 않게</small></div>${favSwitchHtml(d.noStars, 'data-sw="noStars"', '최근 대화에서 즐겨찾기 봇 빼기')}</div>
+     <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 → 즐겨찾기'], ['favorites', '즐겨찾기 → 최근']], d.first)}</div>
+     <div class="fm-set-row"><div><b>🏷️ 라벨 폴더</b><small>라벨 하나를 사이드바 맨 위 폴더로 (예: 「진행 중」)</small></div></div>
+     <div class="fm-chips" role="group" aria-label="라벨 폴더">${[['', '쓰지 않음'], ...labels.map((l) => [l.id, `${l.emoji ? l.emoji + ' ' : ''}${l.name}`])].map(([v, t]) => `<button data-lfolder="${esc(v)}" class="${d.lfolder === v ? 'on' : ''}" aria-pressed="${d.lfolder === v}">${esc(t)}</button>`).join('')}</div>`;
+}
+
+function plusSidebarSettingsBind(modal, d) {
+  const sync = () => {
+    modal.querySelectorAll('[data-sw]').forEach((b) => { const on = !!d[b.dataset.sw]; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    modal.querySelectorAll('[data-recent-only]').forEach((el) => el.classList.toggle('dim', !d.recent));
+    for (const [attr, key] of [['rcount', 'count'], ['rfirst', 'first']]) modal.querySelectorAll(`[data-${attr}]`).forEach((b) => { const on = String(b.dataset[attr]) === String(d[key]); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    modal.querySelectorAll('[data-lfolder]').forEach((b) => { const on = b.dataset.lfolder === d.lfolder; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  };
+  modal.querySelectorAll('[data-sw]').forEach((b) => { b.onclick = () => { d[b.dataset.sw] = !d[b.dataset.sw]; sync(); }; });
+  modal.querySelectorAll('[data-rcount]').forEach((b) => { b.onclick = () => { d.count = +b.dataset.rcount; sync(); }; });
+  modal.querySelectorAll('[data-rfirst]').forEach((b) => { b.onclick = () => { d.first = b.dataset.rfirst; sync(); }; });
+  modal.querySelectorAll('[data-lfolder]').forEach((b) => { b.onclick = () => { d.lfolder = b.dataset.lfolder; sync(); }; });
+  sync();
+}
+
+function plusSidebarDraft() {
+  const r = plusStore.state.recent;
+  return { fav: fav.folder.on, recent: r.on, count: r.count, noStars: r.noStars, first: r.first, lfolder: plusStore.state.labelFolder.lid };
+}
+
+// 설정 저장: 바뀐 것만 쓰고 사이드바를 한 번 맞춘다.
+async function plusSidebarSave(d) {
+  const r = plusStore.state.recent;
+  const changed = d.recent !== r.on || d.count !== r.count || d.noStars !== r.noStars || d.first !== r.first || d.lfolder !== plusStore.state.labelFolder.lid;
+  if (d.fav !== fav.folder.on) await shortcutToggle(d.fav);
+  if (!changed) return;
+  await plusStore.change({ k: 'recent', set: { on: d.recent, count: d.count, noStars: d.noStars, first: d.first } });
+  await plusStore.change({ k: 'labelFolder', set: { lid: d.lfolder } });
+  if (d.recent) recentWatchStart(); else recentWatchStop();
+  await shortcutResync();
+}
+
+// 바로가기 폴더 설정이 바뀐 뒤: 사이드바에 쓰고, 끌기 막기·감시를 맞춘다.
+async function shortcutResync() {
+  try {
+    if (await saver.syncShortcut() === 'written' && ui.app) { ui.order = await readOrder(); render(true); }
+  } catch (err) { toastError(err); }
+  await shortcutGuard();
+  if (shortcutAnyOn()) shortcutPollStart(); // 모두 끄면 감시는 저절로 쉬는 상태가 된다(다른 기기에서 다시 켜면 알아챔)
+}
+
+// ── src/ui/labels.js ──
+// 내 라벨: 봇을 쓰는 사람이 붙이는 「나한테 어떤 봇인지」 표시(진행 중·나중에 할 것·엔딩 봄 …).
+// 폴더와 따로 쓰는 두 번째 분류다. 서버 플러그인 저장소에 두어 기기끼리 같이 쓴다.
+// 자동 라벨 「새로 받음」은 저장하지 않고 그때그때 계산한다(이 기기에서 처음 본 지 7일 안 + 아직 대화 없음).
+
+const LABELS_KEY = 'risuFolderMaster.labels';
+const SEEN_KEY = 'risuFolderMaster.seen';
+const VIEW_LABEL = 'label:';
+const LABEL_NEW = '__new__';
+// 정리는 지워졌다고 확인된 봇(roster.missing)만 한다. 열어 둔 화면의 오래된 순서로 정리하면 다른 기기에서 새로 받은 봇의 라벨을 지운다.
+const labelStore = createSyncStore(LABELS_KEY, labelsNorm, labelsApply, (s) => labelsDropBots(s, roster.missing));
+const labelUi = { seen: {}, sort: 'recent', fold: true }; // 「내 라벨」 칸은 처음엔 접혀 있다
+
+function isLabelView(view) {
+  return typeof view === 'string' && view.startsWith(VIEW_LABEL);
+}
+
+function labelDef(lid) {
+  return labelStore.state.defs.find((d) => d.id === lid) || null;
+}
+
+function labelText(d) {
+  return `${d.emoji ? d.emoji + ' ' : ''}${d.name}`;
+}
+
+function labelHex(d) {
+  return FOLDER_HEX[d.color] || FOLDER_HEX.default;
+}
+
+// 처음 보는 봇 기록(이 기기). 창을 열 때 부른다.
+async function labelSeenLoad() {
+  try {
+    const saved = await ui.prefs?.getItem(SEEN_KEY);
+    const next = seenUpdate(saved && typeof saved === 'object' ? saved : null, orderBotIds(ui.order));
+    labelUi.seen = next;
+    if (JSON.stringify(next) !== JSON.stringify(saved)) await ui.prefs?.setItem(SEEN_KEY, next);
+  } catch {}
+}
+
+function labelIsNew(id) {
+  return isNewBot(id, labelUi.seen, roster.chars);
+}
+
+// 이 라벨이 붙은 봇(지금 순서에 있는 것만). 정렬: 최근 대화순 | 목록 순.
+function labelBotIds(lid) {
+  const order = orderBotIds(ui.order);
+  let ids;
+  if (lid === LABEL_NEW) ids = [...new Set(order)].filter(labelIsNew);
+  else {
+    const set = new Set(Object.entries(labelStore.state.tags).filter(([, l]) => l.includes(lid)).map(([b]) => b));
+    ids = [...new Set(order)].filter((id) => set.has(id));
+  }
+  if (labelUi.sort === 'recent') {
+    const last = (id) => roster.chars.get(id)?.last || 0;
+    ids = ids.map((id, i) => [id, i]).sort((a, b) => last(b[0]) - last(a[0]) || a[1] - b[1]).map(([id]) => id);
+  }
+  return ids;
+}
+
+function labelChipsHtml(id) {
+  const out = labelsOf(labelStore.state, id).map(labelDef).filter(Boolean)
+    .map((d) => `<span class="fm-lbl" style="--c:${labelHex(d)}" title="라벨">${esc(labelText(d))}</span>`);
+  if (labelIsNew(id)) out.push('<span class="fm-lbl new" title="자동 라벨: 받은 지 7일 안 · 아직 대화 없음">🆕 새로 받음</span>');
+  return out.join('');
+}
+
+function labelButtonHtml(id) {
+  const n = labelsOf(labelStore.state, id).length;
+  return `<button class="fm-tagbtn${n ? ' on' : ''}" data-tag="${esc(id)}" title="라벨" aria-label="라벨 붙이기">${icon('tag')}</button>`;
+}
+
+function labelDot(d) {
+  return `<span class="fm-thumb plain fm-lbl-dot" style="--c:${labelHex(d)}">${d.emoji ? esc(d.emoji) : '<i></i>'}</span>`;
+}
+
+// 왼쪽 목록의 「내 라벨」 칸. 접으면 라벨 줄을 숨기고, 지금 보고 있는 라벨 하나만 남긴다(접기 상태는 기기에 기억).
+function labelRailHtml(nav) {
+  const defs = labelStore.state.defs;
+  const fold = labelUi.fold;
+  const shown = (view) => !fold || ui.view === view;
+  const rows = defs.filter((d) => shown(VIEW_LABEL + d.id)).map((d) => nav(`data-view="${VIEW_LABEL}${esc(d.id)}" data-label="${esc(d.id)}"`, labelDot(d), d.name, labelBotIds(d.id).length, ui.view === VIEW_LABEL + d.id ? ' on' : ''));
+  const fresh = labelBotIds(LABEL_NEW).length;
+  const toggle = `data-label-fold aria-expanded="${!fold}" title="${fold ? '라벨 펼치기' : '라벨 접기'}"`;
+  let html = `<div class="fm-rail-label fm-lbl-head"><button class="fm-rail-fold${fold ? ' folded' : ''}" ${toggle}>${icon('down')}<span>내 라벨</span>${fold ? `<i>${defs.length}</i>` : ''}</button><button class="fm-rail-add" data-act="label-new" title="새 라벨" aria-label="새 라벨">${icon('plus')}</button></div>`
+    // 휴대폰은 칸 제목이 안 보이므로 접기 칩을 따로 둔다.
+    + `<button class="fm-nav fm-mob fm-lbl-chip${fold ? ' folded' : ''}" ${toggle}><span class="fm-thumb plain">${icon('tag')}</span><span class="fm-nav-name">라벨</span><span class="fm-nav-count">${fold ? '펼치기' : '접기'}</span></button>`
+    + rows.join('');
+  if (!fold) html += `<div class="fm-rail-label"><span>자동</span></div>`;
+  if (shown(VIEW_LABEL + LABEL_NEW)) html += nav(`data-view="${VIEW_LABEL}${LABEL_NEW}"`, '<span class="fm-thumb plain fm-lbl-dot">🆕</span>', '새로 받음', fresh, ui.view === VIEW_LABEL + LABEL_NEW ? ' on' : '');
+  return html;
+}
+
+function labelHeadHtml() {
+  const lid = ui.view.slice(VIEW_LABEL.length);
+  const d = lid === LABEL_NEW ? { name: '새로 받음', emoji: '🆕', color: 'default' } : labelDef(lid);
+  const n = labelBotIds(lid).length;
+  const sorts = [['recent', '최근 대화순'], ['order', '목록 순']].map(([k, t]) => `<button data-label-sort="${k}" class="${labelUi.sort === k ? 'on' : ''}" aria-pressed="${labelUi.sort === k}">${t}</button>`).join('');
+  const sub = lid === LABEL_NEW ? `${n}개 · 받은 지 7일 안 됐고 아직 대화하지 않은 봇(이 기기 기준)` : `${n}개 · 여러 폴더에 걸쳐 있어도 모아 봅니다`;
+  return `${backButton(labelDot(d))}<div class="fm-head-text" ${lid === LABEL_NEW ? '' : `data-label="${esc(lid)}"`}><h2>${esc(labelText(d))}</h2><p>${esc(sub)}</p></div>
+    <div class="fm-head-actions"><div class="fm-fav-sort" role="group" aria-label="정렬">${sorts}</div>
+    ${lid === LABEL_NEW ? '' : `<button class="fm-btn" data-act="label-edit">${icon('edit')}<span class="fm-text">라벨 편집</span></button>`}
+    <button class="fm-btn" data-act="select-all">${icon('select')}<span class="fm-text">전체 선택</span></button></div>`;
+}
+
+function labelViewHtml() {
+  const lid = ui.view.slice(VIEW_LABEL.length);
+  const ids = labelBotIds(lid);
+  let html = '';
+  if (lid !== LABEL_NEW && plusStore.state.labelFolder.lid === lid) html += `<p class="fm-note">이 라벨은 RisuAI 사이드바 맨 위 바로가기 폴더로도 보입니다.</p>`;
+  if (lid === LABEL_NEW && roster.mode === 'single') {
+    const unread = orderBotIds(ui.order).filter((id) => !roster.resolved(id)).length;
+    if (unread) html += `<p class="fm-note">아직 읽지 않은 봇 ${unread}개는 대화 여부를 몰라 빠져 있습니다. <button class="fm-link" data-act="load-all">모두 읽기</button></p>`;
+  }
+  const empty = lid === LABEL_NEW ? '새로 받은 봇이 없습니다' : '이 라벨이 붙은 봇이 없습니다. 봇 칸의 🏷️ 버튼으로 붙입니다';
+  return html + gridHtml(ids, ui.view, ui.query ? '맞는 봇이 없습니다' : empty);
+}
+
+// ── 라벨 붙이기 ──
+
+// ids 에 라벨을 붙이거나 뗀다. 창은 열린 채로 바로 반영한다.
+async function openLabelPicker(ids) {
+  ids = [...new Set(ids)];
+  if (!ids.length) { toast('라벨을 붙일 봇을 먼저 선택하세요'); return; }
+  const title = ids.length === 1 ? (botName(ids[0]) || '봇') : `봇 ${ids.length}개`;
+  const rows = () => labelStore.state.defs.map((d) => {
+    const have = ids.filter((id) => labelsOf(labelStore.state, id).includes(d.id)).length;
+    const state = have === ids.length ? 'on' : have ? 'some' : '';
+    return `<button class="fm-lrow ${state}" data-lab="${esc(d.id)}" role="checkbox" aria-checked="${state === 'on' ? 'true' : state === 'some' ? 'mixed' : 'false'}"><span class="fm-cb"></span><span class="fm-lbl" style="--c:${labelHex(d)}">${esc(labelText(d))}</span>${labelStore.state.opts.solo === d.id ? '<small>하나만</small>' : ''}</button>`;
+  }).join('');
+  await openModal(
+    `<h3 id="fm-dialog-title">🏷️ ${esc(title)}</h3><p class="fm-desc">누르면 바로 붙고, 다시 누르면 뗍니다.</p>
+     <div class="fm-lrows" data-rows>${rows()}</div>
+     <button class="fm-nav fm-pick-new" data-new-label><span class="fm-thumb plain">${icon('plus')}</span><span class="fm-nav-name">새 라벨…</span></button>
+     <div class="fm-modal-actions"><button class="fm-btn primary" data-x>완료</button></div>`,
+    (modal, close) => {
+      const box = modal.querySelector('[data-rows]');
+      box.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-lab]');
+        if (!b) return;
+        const lid = b.dataset.lab;
+        const all = ids.every((id) => labelsOf(labelStore.state, id).includes(lid));
+        if (!all && ids.length > 1 && lid === labelStore.state.opts.solo) { toast('한 봇에만 붙는 라벨이라 봇 하나를 골라 붙여 주세요'); return; }
+        labelChange(all ? { t: 'remove', bots: ids, label: lid } : { t: 'add', bots: ids, label: lid });
+        rerender(box, rows());
+      });
+      modal.querySelector('[data-new-label]').onclick = async () => {
+        const d = await editLabelDialog(null);
+        if (d) { await labelChange({ t: 'add', bots: ids, label: d.id }); rerender(box, rows()); }
+      };
+      modal.querySelector('[data-x]').onclick = () => close(null);
+    },
+  );
+}
+
+function labelChange(op) {
+  const job = labelStore.change(op, async () => {
+    if (shortcutState.dbOk && labelFolderDef()) { if (await saver.syncShortcut() === 'written') { ui.order = await readOrder(); await shortcutGuard(); } }
+  }).catch((err) => toast('라벨을 저장하지 못했습니다: ' + errorText(err), { error: true })).then(() => { if (ui.app) render(true); });
+  if (ui.app) render(true);
+  return job;
+}
+
+// 라벨 만들기·고치기. 결과: 저장한 라벨 | null. 지우기는 'deleted'.
+async function editLabelDialog(def) {
+  let color = def ? def.color : LABEL_COLORS[labelStore.state.defs.length % 6];
+  const result = await openModal(
+    `<h3 id="fm-dialog-title">${def ? '라벨 편집' : '새 라벨'}</h3>
+     <div class="fm-lab-edit"><input class="fm-field fm-lab-emoji" maxlength="4" placeholder="🙂" value="${esc(def ? def.emoji : '')}" aria-label="이모지(선택)">
+     <input class="fm-field fm-lab-name" maxlength="24" placeholder="라벨 이름 (예: 정주행 중)" value="${esc(def ? def.name : '')}" aria-label="라벨 이름"></div>
+     <span class="fm-label">색</span>
+     <div class="fm-swatches">${LABEL_COLORS.map((c) => `<button class="fm-swatch${color === c ? ' on' : ''}" style="--c:${FOLDER_HEX[c]}" data-c="${c}">${COLOR_NAMES[c]}</button>`).join('')}</div>
+     <div class="fm-modal-actions">${def ? '<button class="fm-btn danger" data-del>라벨 삭제</button><span class="fm-spacer"></span>' : ''}<button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>${def ? '저장' : '만들기'}</button></div>`,
+    (modal, close) => {
+      const name = modal.querySelector('.fm-lab-name');
+      const emoji = modal.querySelector('.fm-lab-emoji');
+      modal.querySelectorAll('[data-c]').forEach((b) => { b.onclick = () => { color = b.dataset.c; modal.querySelectorAll('[data-c]').forEach((x) => x.classList.toggle('on', x === b)); }; });
+      const ok = () => {
+        const n = name.value.trim();
+        if (!n) { name.focus(); return; }
+        close({ id: def ? def.id : 'l-' + newFolderId().slice(0, 8), name: n, emoji: emoji.value.trim(), color });
+      };
+      modal.querySelector('[data-ok]').onclick = ok;
+      name.onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ok(); } };
+      modal.querySelector('[data-x]').onclick = () => close(null);
+      const del = modal.querySelector('[data-del]');
+      if (del) del.onclick = () => close('delete');
+      setTimeout(() => name.focus(), 0);
+    },
+  );
+  if (!result) return null;
+  if (result === 'delete') {
+    const n = labelBotIds(def.id).length;
+    if (!(await askConfirm(`"${def.name}" 라벨 삭제`, `라벨만 지웁니다. 봇은 그대로이고, 이 라벨이 붙은 봇 ${n}개에서 라벨이 빠집니다.`, { confirm: '삭제', danger: true }))) return null;
+    if (plusStore.state.labelFolder.lid === def.id) { await plusStore.change({ k: 'labelFolder', set: { lid: '' } }); }
+    await labelChange({ t: 'drop', label: def.id });
+    if (ui.view === VIEW_LABEL + def.id) ui.view = VIEW_ALL;
+    if (shortcutState.dbOk) await shortcutResync();
+    render(true);
+    toast('라벨을 지웠습니다');
+    return 'deleted';
+  }
+  if (!def && labelStore.state.defs.length >= LABEL_MAX) { toast(`라벨은 ${LABEL_MAX}개까지 만들 수 있습니다`, { error: true }); return null; }
+  await labelChange({ t: 'def', def: result });
+  toast(def ? '라벨을 고쳤습니다' : `"${result.name}" 라벨을 만들었습니다`);
+  return result;
+}
+
+// 왼쪽 목록 라벨에서 오른쪽 클릭(길게 누르기) 메뉴.
+function labelMenuItems(lid) {
+  const inSidebar = plusStore.state.labelFolder.lid === lid;
+  return [
+    ['label-edit', 'edit', '이름·색 바꾸기'],
+    ['label-sidebar', 'sidebar', inSidebar ? '사이드바 폴더 그만 쓰기' : '사이드바 폴더로 쓰기'],
+    ['label-delete', 'close', '라벨 삭제'],
+  ];
+}
+
+async function runLabelMenuAction(act, lid) {
+  const def = labelDef(lid);
+  if (!def) return;
+  if (act === 'label-edit' || act === 'label-delete') {
+    if (act === 'label-delete') {
+      const n = labelBotIds(lid).length;
+      if (!(await askConfirm(`"${def.name}" 라벨 삭제`, `라벨만 지웁니다. 봇은 그대로이고, 이 라벨이 붙은 봇 ${n}개에서 라벨이 빠집니다.`, { confirm: '삭제', danger: true }))) return;
+      if (plusStore.state.labelFolder.lid === lid) await plusStore.change({ k: 'labelFolder', set: { lid: '' } });
+      await labelChange({ t: 'drop', label: lid });
+      if (ui.view === VIEW_LABEL + lid) ui.view = VIEW_ALL;
+      if (shortcutState.dbOk) await shortcutResync();
+      render(true);
+      return;
+    }
+    await editLabelDialog(def);
+    return;
+  }
+  if (act === 'label-sidebar') {
+    const on = plusStore.state.labelFolder.lid !== lid;
+    await plusStore.change({ k: 'labelFolder', set: { lid: on ? lid : '' } });
+    await shortcutResync();
+    render(true);
+    toast(on ? `사이드바 맨 위에 「${labelText(def)}」 바로가기 폴더를 둡니다` : '라벨 사이드바 폴더를 지웠습니다');
+  }
+}
+
+// ── 설정 창의 라벨 칸 ──
+
+function labelSettingsHtml(d) {
+  const chips = (attr, cur) => `<div class="fm-chips" role="group">${[['', '없음'], ...labelStore.state.defs.map((l) => [l.id, labelText(l)])].map(([v, t]) => `<button ${attr}="${esc(v)}" class="${cur === v ? 'on' : ''}" aria-pressed="${cur === v}">${esc(t)}</button>`).join('')}</div>`;
+  return `<span class="fm-label">내 라벨</span>
+     <div class="fm-set-row"><div><b>한 봇에만 붙는 라벨</b><small>새 봇에 붙이면 이전 봇에서 빠집니다 (예: 「진행 중」은 하나만)</small></div></div>${chips('data-lsolo', d.solo)}
+     <div class="fm-set-row"><div><b>보관함 제안에 먼저 넣을 라벨</b><small>오래되지 않았어도 보관함 후보로 올립니다 (예: 「엔딩 봄」)</small></div></div>${chips('data-lfinish', d.finish)}`;
+}
+
+function labelSettingsBind(modal, d) {
+  const sync = () => {
+    for (const [attr, key] of [['lsolo', 'solo'], ['lfinish', 'finish']]) modal.querySelectorAll(`[data-${attr}]`).forEach((b) => { const on = b.dataset[attr] === d[key]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  };
+  modal.querySelectorAll('[data-lsolo]').forEach((b) => { b.onclick = () => { d.solo = b.dataset.lsolo; sync(); }; });
+  modal.querySelectorAll('[data-lfinish]').forEach((b) => { b.onclick = () => { d.finish = b.dataset.lfinish; sync(); }; });
+  sync();
+}
+
+async function labelSettingsSave(d) {
+  const o = labelStore.state.opts;
+  if (d.solo !== o.solo) await labelChange({ t: 'opt', key: 'solo', value: d.solo });
+  if (d.finish !== o.finish) await labelChange({ t: 'opt', key: 'finish', value: d.finish });
+}
+
+// ── src/ui/tools.js ──
+// 1.0.7 도구 창: 배치 기록, 중복 봇, 정리 마법사, 보관함 제안, 폴더 그림 한 번에, 통계, 명령 창(Ctrl+K).
+// 모두 기존 저장 경로(save → saver.commit)로 쓰므로 되돌리기·다른 곳 변경 확인이 그대로 적용된다.
+
+const SNAP_KEY = 'risuFolderMaster.snapshots';
+const SNAP_AUTO_MAX = 15;
+const SNAP_PIN_MAX = 10;
+const ARCHIVE_NAME = '📦 보관함';
+const ARCHIVE_MIN = 5;
+const snaps = { list: [] };
+
+// 이름을 모두 알아야 하는 도구에서: 해적판에서 아직 읽지 않은 봇 수.
+function unreadCount(ids) {
+  return roster.mode === 'single' ? [...new Set(ids)].filter((id) => !roster.resolved(id)).length : 0;
+}
+
+function unreadNote(ids, what) {
+  const n = unreadCount(ids);
+  return n ? `<p class="fm-note warn">아직 정보를 읽지 않은 봇 ${n}개는 ${esc(what)}에서 빠져 있습니다. <button class="fm-link" data-read-all>모두 읽기</button></p>` : '';
+}
+
+// 「모두 읽기」를 누르면 창을 닫고 모두 읽은 뒤 같은 도구를 다시 연다.
+function bindReadAll(modal, close, reopen) {
+  const b = modal.querySelector('[data-read-all]');
+  if (b) b.onclick = async () => { close(null); if (await readAllWithProgress()) reopen(); };
+}
+
+function miniBot(id) {
+  const c = roster.chars.get(id);
+  return `<span class="fm-mini">${avatarHtml(c, id).replace('class="fm-av"', 'class="fm-av sm"')}${esc(botName(id) || '…')}</span>`;
+}
+
+function lazyAvatars(root) {
+  root.querySelectorAll('[data-src]').forEach(async (el) => {
+    const path = el.dataset.src;
+    delete el.dataset.src;
+    const src = await avatars.load(path);
+    if (!src || !el.isConnected) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = src;
+    if (el.classList.contains('fm-thumb')) el.replaceChildren(img); else el.append(img);
+  });
+}
+
+// ── ③ 배치 기록 ──
+
+async function snapLoad() {
+  try {
+    const s = await ui.prefs?.getItem(SNAP_KEY);
+    snaps.list = Array.isArray(s?.list) ? s.list.filter((e) => e && Array.isArray(e.order) && typeof e.at === 'number') : [];
+  } catch { snaps.list = []; }
+}
+
+function snapPersist() {
+  try { ui.prefs?.setItem(SNAP_KEY, { list: snaps.list }); } catch {}
+}
+
+function snapPush(kind, label, order) {
+  const entry = { id: newFolderId().slice(0, 8), at: Date.now(), kind, label: String(label || '').slice(0, 80), order: cloneOrder(order) };
+  snaps.list.unshift(entry);
+  let autos = 0;
+  let pins = 0;
+  snaps.list = snaps.list.filter((e) => (e.kind === 'manual' ? ++pins <= SNAP_PIN_MAX : ++autos <= SNAP_AUTO_MAX));
+  snapPersist();
+  return entry;
+}
+
+// 창을 열 때: 마지막 기록과 다르면 폴더 마스터 밖에서 바뀐 것이다(다른 플러그인·사이드바에서 직접 바꿈·새 봇).
+function snapCheckExternal(order) {
+  const latest = snaps.list.find((e) => e.kind !== 'manual') || snaps.list[0];
+  if (!latest) { snapPush('auto', '처음 기록', order); return; }
+  if (!sameOrder(latest.order, order)) snapPush('external', '바깥에서 바뀜', order);
+}
+
+function diffText(d) {
+  const parts = [];
+  if (d.foldersAdded.length) parts.push(`<span class="p">+ 폴더 ${esc(d.foldersAdded.slice(0, 3).join(', '))}${d.foldersAdded.length > 3 ? ` 외 ${d.foldersAdded.length - 3}` : ''}</span>`);
+  if (d.foldersRemoved.length) parts.push(`<span class="m">− 폴더 ${esc(d.foldersRemoved.slice(0, 3).join(', '))}${d.foldersRemoved.length > 3 ? ` 외 ${d.foldersRemoved.length - 3}` : ''}</span>`);
+  if (d.renamed.length) parts.push(`<span>이름 ${esc(d.renamed[0][0])} → ${esc(d.renamed[0][1])}${d.renamed.length > 1 ? ` 외 ${d.renamed.length - 1}` : ''}</span>`);
+  if (d.moved) parts.push(`<span>봇 ${d.moved}개 옮김</span>`);
+  if (d.botsAdded) parts.push(`<span class="p">+ 봇 ${d.botsAdded}</span>`);
+  if (d.botsRemoved) parts.push(`<span class="m">− 봇 ${d.botsRemoved}</span>`);
+  return parts.join(' · ') || '<span>순서만 바뀜</span>';
+}
+
+function snapSummary(order) {
+  const folders = order.filter(isFolder);
+  return `폴더 ${folders.length}개 · 봇 ${new Set(orderBotIds(order)).size}개`;
+}
+
+async function openSnapshots() {
+  try { ui.order = await readOrder(); } catch (err) { toastError(err); return; }
+  const kindName = { auto: '', external: '⚠️ ', manual: '📌 ' };
+  const rows = () => snaps.list.map((e, i) => {
+    const older = snaps.list.slice(i + 1).find(() => true);
+    const cur = sameOrder(e.order, ui.order);
+    const t = timeAgo(e.at);
+    return `<div class="fm-snap${cur ? ' cur' : ''}${e.kind === 'external' ? ' ext' : ''}">
+      <div class="fm-snap-text"><b>${kindName[e.kind] || ''}${esc(e.label || '기록')}</b>${cur ? ' <span class="fm-badge">지금과 같음</span>' : ''}<small title="${esc(t.full)}">${esc(t.short)} · ${esc(snapSummary(e.order))}</small>
+      <div class="fm-diff">${older ? diffText(diffOrders(older.order, e.order)) : '<span>가장 오래된 기록</span>'}</div></div>
+      <div class="fm-snap-acts">${e.kind === 'manual' ? `<button class="fm-btn ghost fm-icon" data-snap-del="${e.id}" title="이 기록 지우기" aria-label="이 기록 지우기">${icon('close')}</button>` : ''}
+      <button class="fm-btn" data-snap-view="${e.id}">미리보기</button>${cur ? '' : `<button class="fm-btn" data-snap-go="${e.id}">${icon('undo')}이 배치로</button>`}</div></div>`;
+  }).join('') || '<div class="fm-empty">아직 기록이 없습니다</div>';
+  const act = await openModal(
+    `<h3 id="fm-dialog-title">${icon('history')} 배치 기록</h3>
+     <p class="fm-desc">폴더 배치를 바꿀 때마다 이 기기에 자동으로 남깁니다(최근 ${SNAP_AUTO_MAX}개). 폴더 마스터 밖에서 바뀐 것(다른 플러그인, 사이드바에서 직접 고친 것, 새로 받은 봇)도 창을 열 때 알아채 「바깥에서 바뀜」으로 남깁니다.</p>
+     <div class="fm-snaps" data-rows>${rows()}</div>
+     <p class="fm-note">되돌려도 그 사이에 새로 받은 봇은 지우지 않고 폴더 밖 맨 뒤에 둡니다. 되돌린 뒤 「되돌리기」로 다시 돌아올 수 있습니다.</p>
+     <div class="fm-modal-actions"><button class="fm-btn" data-snap-pin>📌 지금 배치 저장</button><span class="fm-spacer"></span><button class="fm-btn primary" data-x>닫기</button></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-big');
+      modal.querySelector('[data-x]').onclick = () => close(null);
+      modal.addEventListener('click', async (e) => {
+        const go = e.target.closest('[data-snap-go]');
+        if (go) { close({ go: go.dataset.snapGo }); return; }
+        const view = e.target.closest('[data-snap-view]');
+        if (view) { close({ view: view.dataset.snapView }); return; }
+        const del = e.target.closest('[data-snap-del]');
+        if (del) { snaps.list = snaps.list.filter((x) => x.id !== del.dataset.snapDel); snapPersist(); rerender(modal.querySelector('[data-rows]'), rows()); return; }
+        if (e.target.closest('[data-snap-pin]')) close({ pin: true });
+      });
+    },
+  );
+  if (!act) return;
+  if (act.pin) {
+    const name = await askText('지금 배치 저장', { placeholder: '예: 정리 끝난 판', confirm: '저장', desc: `손으로 저장한 기록은 자동 기록이 밀려나도 지워지지 않습니다(최대 ${SNAP_PIN_MAX}개).` });
+    if (name) { snapPush('manual', name, ui.order); toast('지금 배치를 저장했습니다'); }
+    openSnapshots();
+    return;
+  }
+  const entry = snaps.list.find((x) => x.id === (act.go || act.view));
+  if (!entry) return;
+  if (act.view) { await previewSnapshot(entry); return; }
+  await restoreSnapshot(entry);
+}
+
+async function previewSnapshot(entry) {
+  const folders = entry.order.filter(isFolder);
+  const loose = entry.order.filter((x) => typeof x === 'string');
+  const t = timeAgo(entry.at);
+  const go = await openModal(
+    `<h3 id="fm-dialog-title">${esc(entry.label || '기록')}</h3><p class="fm-desc">${esc(t.full)} · ${esc(snapSummary(entry.order))}</p>
+     <div class="fm-report">${folders.map((f) => `<section><h4><i class="fm-dot" style="--c:${FOLDER_HEX[f.color] || FOLDER_HEX.default}"></i> ${esc(f.name || '이름 없음')} ${f.data.length}</h4><ul><li>${esc(f.data.slice(0, 8).map((id) => botName(id) || '…').join(', '))}${f.data.length > 8 ? ` 외 ${f.data.length - 8}` : ''}</li></ul></section>`).join('')}
+     <section><h4>폴더 밖 ${loose.length}</h4></section></div>
+     <div class="fm-modal-actions"><button class="fm-btn" data-x>닫기</button>${sameOrder(entry.order, ui.order) ? '' : '<button class="fm-btn primary" data-ok>이 배치로</button>'}</div>`,
+    (modal, close) => {
+      modal.querySelector('[data-x]').onclick = () => close(false);
+      const ok = modal.querySelector('[data-ok]');
+      if (ok) ok.onclick = () => close(true);
+    },
+  );
+  if (go) await restoreSnapshot(entry);
+  else openSnapshots();
+}
+
+async function restoreSnapshot(entry) {
+  const next = restoreOrder(ui.order, entry.order);
+  const d = diffOrders(ui.order, next);
+  if (sameOrder(next, ui.order)) { toast('지금 배치와 같습니다'); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = diffText(d);
+  if (!(await askConfirm('이 배치로 되돌릴까요?', `「${entry.label}」(${timeAgo(entry.at).short}) 배치로 되돌립니다.\n바뀌는 것: ${tmp.textContent}`, { confirm: '되돌리기' }))) return;
+  await save(`배치 복원: ${entry.label}`, (o) => { const n = restoreOrder(o, entry.order); return sameOrder(n, o) ? null : n; });
+}
+
+// ── 보관함 (② ⑤ 공용) ──
+
+function archiveFolderId(order = ui.order) {
+  const saved = plusStore.state.archive.folderId;
+  if (saved && order.some((x) => isFolder(x) && x.id === saved)) return saved;
+  const byName = order.find((x) => isFolder(x) && !isShortcut(x) && /^(📦\s*)?보관함$/.test(String(x.name || '').trim()));
+  return byName ? byName.id : '';
+}
+
+async function archiveMove(ids, label) {
+  ids = [...new Set(ids)];
+  if (!ids.length) return false;
+  let target = '';
+  const ok = await save(label || `보관함으로 ${ids.length}개`, (o) => {
+    // 창을 열어 둔 사이 지워진 봇은 빼고 옮긴다(없는 봇 자리를 다시 만들지 않게).
+    const live = new Set(orderBotIds(o));
+    const todo = ids.filter((id) => live.has(id));
+    if (!todo.length) return null;
+    const fid = archiveFolderId(o);
+    if (fid) { target = fid; return moveBotsToFolder(o, todo, fid); }
+    const r = createFolder(o, ARCHIVE_NAME, todo);
+    target = r.folder.id;
+    return r.order;
+  });
+  // 원래 있던 「보관함」을 쓴 경우도 기억해 두면, 나중에 이름을 바꿔도 보관함으로 알아본다.
+  if (ok && target && target !== plusStore.state.archive.folderId) await plusStore.change({ k: 'archive', set: { folderId: target } }).catch(() => {});
+  if (ok) ui.selected.clear();
+  return ok;
+}
+
+// ── ② 중복 봇 ──
+
+async function openDuplicates() {
+  const ids = orderBotIds(ui.order);
+  const groups = findDuplicates(ids, roster.chars, plusStore.state.dupIgnore);
+  const keep = new Map(groups.map((g) => [g.key, new Set([g.ids[0]])]));
+  const ignored = new Set();
+  const body = () => {
+    const live = groups.filter((g) => !ignored.has(g.key));
+    if (!live.length) return '<div class="fm-empty">이름이 같거나 비슷한 봇이 없습니다</div>';
+    return live.map((g) => {
+      const first = roster.chars.get(g.ids[0]);
+      return `<section class="fm-dupe"><div class="fm-dupe-h">${avatarHtml(first, g.ids[0])}<b>${esc(first.name)}</b><span class="fm-badge warn">${g.ids.length}개</span><small>${g.same ? '이름 같음' : '이름 비슷함'}</small>
+        <button class="fm-link" data-dup-ignore="${esc(g.key)}">이 묶음 무시</button></div>
+        <div class="fm-dupe-rows">${g.ids.map((id) => {
+          const c = roster.chars.get(id);
+          const t = timeAgo(c.last);
+          const on = keep.get(g.key).has(id);
+          return `<div class="fm-dupe-row"><button class="fm-lrow ${on ? 'on' : ''}" data-dup-keep="${esc(g.key)}" data-id="${esc(id)}" role="checkbox" aria-checked="${on}" aria-label="남기기"><span class="fm-cb"></span></button>
+            <span class="fm-dupe-name">${esc(c.name)}</span><span class="fm-dupe-where">${icon('folder')}${esc(favFolderName(id))}</span><span class="fm-dupe-last">${t ? esc(t.short) : '대화 없음'}</span>
+            <button class="fm-btn fm-sm" data-dup-loc="${esc(id)}">${icon('locate')}찾기</button></div>`;
+        }).join('')}</div></section>`;
+    }).join('');
+  };
+  const rest = () => groups.filter((g) => !ignored.has(g.key)).flatMap((g) => g.ids.filter((id) => !keep.get(g.key).has(id)));
+  const act = await openModal(
+    `<h3 id="fm-dialog-title">${icon('copy')} 중복 봇 찾기</h3>
+     <p class="fm-desc">새 버전을 다시 받다 보면 같은 봇이 쌓입니다. 이름이 같거나 버전 표기·「사본」만 다른 봇을 묶어 보여 줍니다. 봇을 지우지는 않습니다. 지우려면 「찾기」로 사이드바의 그 칸을 짚은 뒤 RisuAI에서 지우세요.</p>
+     ${unreadNote(ids, '중복 찾기')}
+     <div class="fm-dupes" data-rows>${body()}</div>
+     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn primary" data-dup-archive>📦 보관함 폴더로 옮기기</button></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-big');
+      const rows = modal.querySelector('[data-rows]');
+      const sync = () => {
+        rerender(rows, body());
+        const n = rest().length;
+        modal.querySelector('[data-rest]').textContent = n ? `체크하지 않은 봇 ${n}개` : '';
+        modal.querySelector('[data-dup-archive]').disabled = !n;
+        lazyAvatars(rows);
+      };
+      rows.addEventListener('click', (e) => {
+        const k = e.target.closest('[data-dup-keep]');
+        if (k) { const set = keep.get(k.dataset.dupKeep); if (set.has(k.dataset.id)) { if (set.size > 1) set.delete(k.dataset.id); else toast('묶음마다 하나는 남겨야 합니다'); } else set.add(k.dataset.id); sync(); return; }
+        const ig = e.target.closest('[data-dup-ignore]');
+        if (ig) { ignored.add(ig.dataset.dupIgnore); sync(); return; }
+        const loc = e.target.closest('[data-dup-loc]');
+        if (loc) close({ locate: loc.dataset.dupLoc });
+      });
+      modal.querySelector('[data-x]').onclick = () => close({ done: true });
+      modal.querySelector('[data-dup-archive]').onclick = () => close({ archive: rest() });
+      bindReadAll(modal, close, openDuplicates);
+      sync();
+    },
+  );
+  if (ignored.size) await plusStore.change({ k: 'dupIgnore', add: [...ignored] }).catch(() => {});
+  if (!act) return;
+  if (act.locate) { locateBot(act.locate); return; }
+  if (act.archive?.length) await archiveMove(act.archive, `중복 봇 ${act.archive.length}개 → 보관함`);
+}
+
+// ── ④ 정리 마법사 ──
+
+async function openWizard(mode = 'name') {
+  const model = currentModel();
+  const groups = suggestGroups(model.root, roster.chars, model.folders, mode);
+  const on = new Set(groups.filter((g) => g.ids.length >= 2 || g.folderId).map((g) => g.key));
+  const titles = new Map(groups.map((g) => [g.key, g.title]));
+  const body = () => groups.map((g) => {
+    const f = g.folderId ? model.folders.find((x) => x.id === g.folderId) : null;
+    const checked = on.has(g.key);
+    const thumb = f ? folderThumb(f) : `<span class="fm-thumb" style="--c:${FOLDER_HEX.default}">${icon('plus')}</span>`;
+    return `<section class="fm-wz${checked ? '' : ' off'}"><div class="fm-wz-h"><button class="fm-lrow ${checked ? 'on' : ''}" data-wz="${esc(g.key)}" role="checkbox" aria-checked="${checked}" aria-label="이 제안 쓰기"><span class="fm-cb"></span></button>${thumb}
+      <div class="fm-wz-t"><b>${esc(titles.get(g.key))} <small>${f ? '(있는 폴더)' : '(새 폴더)'}</small></b><small>봇 ${g.ids.length}개${f ? ' 추가' : ''}</small></div>
+      ${f ? '' : `<button class="fm-btn ghost fm-icon" data-wz-name="${esc(g.key)}" title="새 폴더 이름 바꾸기" aria-label="새 폴더 이름 바꾸기">${icon('edit')}</button>`}<span class="fm-why">${esc(g.why)}</span></div>
+      <div class="fm-minis">${g.ids.slice(0, 5).map(miniBot).join('')}${g.ids.length > 5 ? `<span class="fm-mini more">+${g.ids.length - 5}개 더</span>` : ''}</div></section>`;
+  }).join('') || `<div class="fm-empty">${model.root.length ? '묶을 만한 봇을 찾지 못했습니다. 다른 기준을 골라 보세요' : '폴더 밖 봇이 없습니다'}</div>`;
+  const summary = () => {
+    const picked = groups.filter((g) => on.has(g.key));
+    const fresh = picked.filter((g) => !g.folderId).length;
+    const bots = picked.reduce((n, g) => n + g.ids.length, 0);
+    return picked.length ? `${fresh ? `폴더 ${fresh}개 새로 만들고 ` : ''}봇 ${bots}개 옮김 · 남는 폴더 밖 봇 ${model.root.length - bots}개` : '고른 제안이 없습니다';
+  };
+  const modes = [['name', '이름'], ['creator', '제작자'], ['tag', '태그']];
+  const act = await openModal(
+    `<h3 id="fm-dialog-title">${icon('wand')} 정리 마법사</h3>
+     <p class="fm-desc">폴더 밖 봇 ${model.root.length}개를 묶어 폴더를 제안합니다. 체크한 제안만 적용하고, 적용한 뒤에도 「되돌리기」로 한 번에 돌아올 수 있습니다.</p>
+     <div class="fm-wz-modes"><span>묶는 기준</span><div class="fm-fav-sort" role="group">${modes.map(([k, t]) => `<button data-wz-mode="${k}" class="${mode === k ? 'on' : ''}" aria-pressed="${mode === k}">${t}</button>`).join('')}</div></div>
+     ${unreadNote(model.root, '제안')}
+     <div class="fm-wzs" data-rows>${body()}</div>
+     <div class="fm-modal-actions"><span class="fm-count-note" data-sum></span><span class="fm-spacer"></span><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>적용</button></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-big');
+      const rows = modal.querySelector('[data-rows]');
+      const sync = () => { rerender(rows, body()); modal.querySelector('[data-sum]').textContent = summary(); modal.querySelector('[data-ok]').disabled = !groups.some((g) => on.has(g.key)); lazyAvatars(rows); };
+      rows.addEventListener('click', async (e) => {
+        const t = e.target.closest('[data-wz]');
+        if (t) { on.has(t.dataset.wz) ? on.delete(t.dataset.wz) : on.add(t.dataset.wz); sync(); return; }
+        const n = e.target.closest('[data-wz-name]');
+        if (n) {
+          const k = n.dataset.wzName;
+          const name = await askText('새 폴더 이름', { value: titles.get(k), confirm: '바꾸기' });
+          if (name) titles.set(k, name);
+          sync();
+        }
+      });
+      modal.querySelectorAll('[data-wz-mode]').forEach((b) => { b.onclick = () => close({ mode: b.dataset.wzMode }); });
+      modal.querySelector('[data-x]').onclick = () => close(null);
+      modal.querySelector('[data-ok]').onclick = () => close({ apply: true });
+      bindReadAll(modal, close, () => openWizard(mode));
+      sync();
+    },
+  );
+  if (!act) return;
+  if (act.mode) { if (act.mode !== mode) openWizard(act.mode); else openWizard(mode); return; }
+  const picked = groups.filter((g) => on.has(g.key));
+  const fresh = picked.filter((g) => !g.folderId).length;
+  let skipped = 0;
+  await save(`정리 마법사: ${fresh ? `새 폴더 ${fresh}개 · ` : ''}봇 ${picked.reduce((n, g) => n + g.ids.length, 0)}개`, (o) => {
+    let out = o;
+    skipped = 0;
+    const loose = new Set(out.filter((x) => typeof x === 'string'));
+    for (const g of picked) {
+      const ids = g.ids.filter((id) => loose.has(id));
+      if (!ids.length) continue;
+      if (g.folderId) {
+        // 「있는 폴더에 추가」로 확인한 제안인데 그 사이 폴더가 지워졌으면 새로 만들지 않고 건너뛴다.
+        if (!findFolder(out, g.folderId)) { skipped++; continue; }
+        out = moveBotsToFolder(out, ids, g.folderId);
+      } else out = createFolder(out, titles.get(g.key), ids).order;
+      for (const id of ids) loose.delete(id);
+    }
+    return out;
+  });
+  if (skipped) toast(`그 사이 지워진 폴더 ${skipped}개에 넣을 제안은 건너뛰었습니다`, { error: true, ms: 5000 });
+}
+
+// ── ⑤ 보관함 제안 ──
+
+function archiveFinished() {
+  const lid = labelStore.state.opts.finish;
+  return lid ? Object.entries(labelStore.state.tags).filter(([, l]) => l.includes(lid)).map(([b]) => b) : [];
+}
+
+function archiveList(days, folderId) {
+  let list = archiveCandidates(ui.order, roster.chars, { days, archiveId: archiveFolderId(), finished: archiveFinished() });
+  if (folderId) {
+    const set = new Set(folderId === ROOT ? currentModel().root : currentModel().folders.find((f) => f.id === folderId)?.data || []);
+    list = list.filter((x) => set.has(x.id));
+  }
+  return list;
+}
+
+// 첫 화면 띠. 즐겨찾기 봇은 세지 않는다.
+function archiveBannerHtml() {
+  const a = plusStore.state.archive;
+  if (!a.on || ui.reorder || Date.now() < a.snooze) return '';
+  const n = archiveList(a.days).filter((x) => !favIsStar(x.id)).length;
+  if (n < ARCHIVE_MIN) return '';
+  return `<div class="fm-arch-banner"><span class="fm-arch-ic">${icon('box')}</span><div><b>${a.days}일 넘게 대화하지 않았거나 다 본 봇이 ${n}개 있어요</b><small>보관함 폴더로 옮기면 사이드바가 짧아집니다. 채팅은 그대로 남습니다.</small></div>
+    <button class="fm-btn" data-act="archive-snooze">나중에</button><button class="fm-btn primary" data-act="archive">골라서 옮기기</button></div>`;
+}
+
+async function openArchive(opts = {}) {
+  let days = plusStore.state.archive.days;
+  const folderId = opts.folder || '';
+  let picked = null;
+  const folderName = folderId ? (folderId === ROOT ? '폴더 밖' : folderById(folderId)?.name || '폴더') : '';
+  const act = await openModal(
+    `<h3 id="fm-dialog-title">${icon('box')} 보관함으로 옮길 봇${folderName ? ` · ${esc(folderName)}` : ''}</h3>
+     <p class="fm-desc">오래 대화하지 않은 봇${labelStore.state.opts.finish ? `과 「${esc(labelText(labelDef(labelStore.state.opts.finish) || { name: '' }))}」 라벨이 붙은 봇` : ''}입니다. 즐겨찾는 봇은 처음엔 체크되어 있지 않습니다. 보관함 폴더가 없으면 「${ARCHIVE_NAME}」를 만듭니다.</p>
+     <div class="fm-wz-modes"><span>기준</span><div class="fm-fav-sort" role="group">${[30, 60, 90].map((d) => `<button data-days="${d}">${d}일</button>`).join('')}</div></div>
+     ${unreadNote(orderBotIds(ui.order), '후보')}
+     <div class="fm-arch-list" data-rows></div>
+     <div class="fm-modal-actions"><span class="fm-count-note" data-sum></span><span class="fm-spacer"></span><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>보관함으로</button></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-big');
+      const rows = modal.querySelector('[data-rows]');
+      let list = [];
+      const draw = () => {
+        list = archiveList(days, folderId);
+        if (!picked) picked = new Set(list.filter((x) => !favIsStar(x.id)).map((x) => x.id));
+        for (const id of [...picked]) if (!list.some((x) => x.id === id)) picked.delete(id);
+        rerender(rows, list.map((x) => {
+          const on = picked.has(x.id);
+          const c = roster.chars.get(x.id);
+          const why = x.finished ? `${labelText(labelDef(labelStore.state.opts.finish) || { name: '다 봄' })}${x.days !== null ? ` · ${x.days}일 전` : ''}` : `${x.days}일 전`;
+          return `<button class="fm-arch-row${on ? ' on' : ''}" data-arch="${esc(x.id)}" role="checkbox" aria-checked="${on}"><span class="fm-cb"></span>${avatarHtml(c, x.id)}<span class="fm-arch-t"><b>${esc(c.name)}</b><small>${esc(why)} · ${esc(favFolderName(x.id))}${favIsStar(x.id) ? ' · ★ 즐겨찾기' : ''}</small></span></button>`;
+        }).join('') || `<div class="fm-empty">${days}일 넘게 대화하지 않은 봇이 없습니다</div>`);
+        modal.querySelectorAll('[data-days]').forEach((b) => { const on = +b.dataset.days === days; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+        modal.querySelector('[data-sum]').textContent = `${list.length}개 중 ${picked.size}개 선택`;
+        const ok = modal.querySelector('[data-ok]');
+        ok.disabled = !picked.size;
+        ok.textContent = picked.size ? `${picked.size}개 보관함으로` : '보관함으로';
+        lazyAvatars(rows);
+      };
+      rows.addEventListener('click', (e) => {
+        const r = e.target.closest('[data-arch]');
+        if (!r) return;
+        picked.has(r.dataset.arch) ? picked.delete(r.dataset.arch) : picked.add(r.dataset.arch);
+        draw();
+      });
+      modal.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => { days = +b.dataset.days; picked = null; draw(); }; });
+      modal.querySelector('[data-x]').onclick = () => close(null);
+      modal.querySelector('[data-ok]').onclick = () => close([...picked]);
+      bindReadAll(modal, close, () => openArchive(opts));
+      draw();
+    },
+  );
+  // 기준 일수는 실제로 옮겼을 때만 기억한다(둘러보다 취소하면 그대로).
+  if (act && act.length && days !== plusStore.state.archive.days) plusStore.change({ k: 'archive', set: { days } }).catch(() => {});
+  if (act && act.length) await archiveMove(act, `보관함으로 ${act.length}개`);
+}
+
+async function archiveSnooze() {
+  await plusStore.change({ k: 'archive', set: { snooze: Date.now() + 7 * DAY_MS } }).catch(() => {});
+  renderMain(true);
+  toast('7일 동안 보관함 제안을 띄우지 않습니다. 설정에서 끌 수도 있습니다');
+}
+
+// ── ⑥ 폴더 그림 한 번에 ──
+
+function templateRank(name) {
+  return TEMPLATES.map((t, i) => [t, templateScore(t, name), i]).sort((a, b) => b[1] - a[1] || a[2] - b[2]);
+}
+
+async function openBatchIcons() {
+  const folders = currentModel().folders.filter((f) => !f.imgFile);
+  if (!folders.length) { toast('모든 폴더에 그림이 있습니다'); return; }
+  const pick = new Map();
+  const on = new Set();
+  const alts = new Map();
+  for (const f of folders) {
+    const ranked = templateRank(f.name);
+    const good = ranked.filter((r) => r[1] > 0).map((r) => r[0]);
+    const list = [...good, ...TEMPLATES.filter((t) => t.cat === '관리' && !good.includes(t))].slice(0, 4);
+    alts.set(f.id, list);
+    pick.set(f.id, list[0]);
+    if (good.length) on.add(f.id);
+  }
+  let withText = false;
+  const body = () => folders.map((f) => {
+    const t = pick.get(f.id);
+    const checked = on.has(f.id);
+    return `<div class="fm-bi${checked ? '' : ' off'}"><button class="fm-lrow ${checked ? 'on' : ''}" data-bi="${esc(f.id)}" role="checkbox" aria-checked="${checked}" aria-label="${esc(f.name)} 적용"><span class="fm-cb"></span></button>
+      <div class="fm-bi-row">${folderThumb(f)}<span class="fm-bi-arrow">→</span><span class="fm-thumb fm-bi-new"><img src="${t.thumb}" alt=""></span></div>
+      <b>${esc(f.name || '이름 없음')}</b>
+      <div class="fm-bi-alts">${alts.get(f.id).map((a) => `<button class="${a === t ? 'on' : ''}" data-bi-alt="${esc(f.id)}" data-slug="${a.slug}" title="${esc(a.name)}"><img src="${a.thumb}" alt="${esc(a.name)}"></button>`).join('')}</div></div>`;
+  }).join('');
+  const act = await openModal(
+    `<h3 id="fm-dialog-title">${icon('image')} 폴더 그림 한 번에</h3>
+     <p class="fm-desc">그림 없는 폴더 ${folders.length}개에 이름에 어울리는 템플릿을 추천합니다. 아래 작은 그림으로 다른 후보를 고를 수 있고, 체크한 폴더만 그림을 받아 저장합니다.</p>
+     <div class="fm-set-row"><div><b>글씨도 폴더 이름으로</b><small>종이판이 있는 템플릿은 폴더 이름(8자까지)을 새로 씁니다</small></div>${favSwitchHtml(false, 'data-bi-text', '글씨도 폴더 이름으로')}</div>
+     <div class="fm-bis" data-rows>${body()}</div>
+     <p class="fm-note" data-progress hidden></p>
+     <div class="fm-modal-actions"><span class="fm-count-note" data-sum></span><span class="fm-spacer"></span><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>적용</button></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-big');
+      const rows = modal.querySelector('[data-rows]');
+      let busy = false;
+      const sync = () => {
+        rerender(rows, body());
+        modal.querySelector('[data-sum]').textContent = `${on.size}개 적용 · 그림 ${on.size}장 받기`;
+        modal.querySelector('[data-ok]').disabled = !on.size || busy;
+        lazyAvatars(rows);
+      };
+      rows.addEventListener('click', (e) => {
+        if (busy) return;
+        const c = e.target.closest('[data-bi]');
+        if (c) { on.has(c.dataset.bi) ? on.delete(c.dataset.bi) : on.add(c.dataset.bi); sync(); return; }
+        const a = e.target.closest('[data-bi-alt]');
+        if (a) { pick.set(a.dataset.biAlt, TEMPLATES.find((t) => t.slug === a.dataset.slug)); on.add(a.dataset.biAlt); sync(); }
+      });
+      const sw = modal.querySelector('[data-bi-text]');
+      sw.onclick = () => { withText = !withText; sw.classList.toggle('on', withText); sw.setAttribute('aria-checked', String(withText)); };
+      modal.querySelector('[data-x]').onclick = () => { if (!busy) close(null); };
+      modal.querySelector('[data-ok]').onclick = async () => {
+        if (busy) return;
+        busy = true;
+        sync();
+        const prog = modal.querySelector('[data-progress]');
+        prog.hidden = false;
+        const done = new Map();
+        const todo = folders.filter((f) => on.has(f.id));
+        try {
+          for (const [i, f] of todo.entries()) {
+            prog.textContent = `그림 받는 중 ${i + 1} / ${todo.length} · ${f.name || ''}`;
+            const t = pick.get(f.id);
+            const bytes = withText && t.editable !== false && t.signs?.length
+              ? await canvasBytes(await composeSign(t, [...(f.name || '')].slice(0, SIGN_MAX).join('') || t.name))
+              : await fetchTemplateFile(`${t.slug}.webp`);
+            const path = await Risuai.saveAsset(bytes);
+            if (!path) throw new Error('그림을 저장하지 못했습니다');
+            done.set(f.id, path);
+          }
+          close(done);
+        } catch (err) {
+          toastError(err);
+          if (done.size) close(done);
+          else { busy = false; prog.hidden = true; sync(); }
+        }
+      };
+      sync();
+    },
+  );
+  if (!act || !act.size) return;
+  let kept = 0;
+  await save(`폴더 그림 ${act.size}개`, (o) => {
+    let out = o;
+    kept = 0;
+    for (const [fid, path] of act) {
+      const ref = findFolder(out, fid);
+      // 그 사이 다른 곳에서 그림을 넣은 폴더는 덮어쓰지 않는다.
+      if (!ref) continue;
+      if (ref.folder.imgFile) { kept++; continue; }
+      out = updateFolder(out, fid, { imgFile: path });
+    }
+    return out;
+  });
+  if (kept) toast(`그 사이 그림이 생긴 폴더 ${kept}개는 그대로 두었습니다`, { ms: 5000 });
+}
+
+// ── ⑨ 통계 ──
+
+async function openStats() {
+  const s = folderStats(ui.order, roster.chars);
+  const max = Math.max(1, ...s.rows.map((r) => r.total), s.root.total);
+  const bar = (key, name, color, r) => `<button class="fm-stat-row" data-stat="${esc(key)}" title="안 쓴 봇 보기"><span class="fm-stat-n"><i class="fm-dot" style="--c:${color}"></i>${esc(name)}</span>
+    <span class="fm-stat-tr"><i class="a" style="width:${(r.active / max) * 100}%"></i><i class="s" style="width:${((r.total - r.active) / max) * 100}%"></i></span><span class="fm-stat-v">${r.active} / ${r.total}</span></button>`;
+  const oldest = s.oldest ? `${botName(s.oldest.id) || '…'} (${Math.floor((Date.now() - s.oldest.last) / DAY_MS)}일)` : '—';
+  const act = await openModal(
+    `<h3 id="fm-dialog-title">${icon('chart')} 통계</h3>
+     <div class="fm-stats"><div><small>전체 봇</small><b>${s.total}</b></div><div><small>폴더</small><b>${s.folders}</b></div><div><small>30일 안에 대화</small><b class="ok">${s.active}</b></div><div><small>폴더 밖</small><b class="warn">${s.root.total}</b></div></div>
+     ${unreadNote(orderBotIds(ui.order), '통계')}
+     <div class="fm-stat-legend"><span><i class="a"></i>30일 안에 대화</span><span><i class="s"></i>안 씀·모름</span><small>막대를 누르면 그 폴더의 오래된 봇을 보관함 후보로 봅니다</small></div>
+     <div class="fm-stat-rows">${s.rows.map((r) => bar(r.id, r.name, FOLDER_HEX[r.color] || FOLDER_HEX.default, r)).join('')}${bar(ROOT, '폴더 밖', FOLDER_HEX.default, s.root)}</div>
+     <p class="fm-desc fm-stat-foot">가장 많이 쓴 폴더: ${esc(s.top ? s.top.name : '—')} · 가장 오래 묵은 봇: ${esc(oldest)}</p>
+     <div class="fm-modal-actions"><button class="fm-btn primary" data-x>닫기</button></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-big');
+      modal.querySelector('[data-x]').onclick = () => close(null);
+      modal.querySelectorAll('[data-stat]').forEach((b) => { b.onclick = () => close(b.dataset.stat); });
+      bindReadAll(modal, close, openStats);
+    },
+  );
+  if (act) openArchive({ folder: act });
+}
+
+// ── ⑦ 명령 창 ──
+
+const PALETTE_CMDS = [
+  ['create-folder', 'plus', '새 폴더'],
+  ['wizard', 'wand', '정리 마법사'],
+  ['dups', 'copy', '중복 봇 찾기'],
+  ['archive', 'box', '보관함 정리'],
+  ['snapshots', 'history', '배치 기록'],
+  ['icons', 'image', '폴더 그림 한 번에'],
+  ['stats', 'chart', '통계'],
+  ['check', 'scan', '정리 점검'],
+  ['fav-view', 'star', '즐겨찾는 봇'],
+  ['reorder', 'move', '순서 편집'],
+  ['sidebar', 'sidebar', '사이드바 배열'],
+  ['settings', 'gear', '설정 · 테마'],
+  ['reload', 'refresh', '새로 불러오기'],
+];
+
+function paletteBotActions(id) {
+  const f = currentModel().folders.find((x) => x.data.includes(id));
+  return [
+    ['locate', 'locate', '사이드바에서 찾기'],
+    ['move', 'folder', '다른 폴더로 옮기기…'],
+    ['star', 'star', favIsStar(id) ? '즐겨찾기 해제' : '즐겨찾기에 추가'],
+    ['label', 'tag', '라벨 붙이기…'],
+    ...(f ? [['open', 'layers', `「${f.name || '폴더'}」 열기`]] : []),
+  ];
+}
+
+async function openPalette() {
+  if (!ui.app || ui.reorder || document.querySelector('.fm-modal-back')) return;
+  const st = { q: '', sel: 0, bot: null, items: [] };
+  const build = () => {
+    const q = st.q.trim().toLowerCase();
+    const items = [];
+    if (st.bot) {
+      for (const [a, i, t] of paletteBotActions(st.bot)) items.push({ kind: 'act', id: a, icon: i, text: t });
+      return items;
+    }
+    const ids = [...new Set(orderBotIds(ui.order))];
+    const bots = q ? ids.filter((id) => botName(id).toLowerCase().includes(q)).slice(0, 8) : recentRank(ids, recentStore.state.list, roster.chars, { count: 5 });
+    for (const id of bots) items.push({ kind: 'bot', id, text: botName(id) || '…', sub: favFolderName(id) });
+    const folders = currentModel().folders.filter((f) => !q || (f.name || '').toLowerCase().includes(q)).slice(0, q ? 5 : 0);
+    for (const f of folders) items.push({ kind: 'folder', id: f.id, text: f.name || '이름 없음', sub: `봇 ${f.data.length}개` });
+    for (const [a, i, t] of PALETTE_CMDS) if (!q || t.toLowerCase().includes(q)) items.push({ kind: 'cmd', id: a, icon: i, text: t });
+    return items;
+  };
+  const group = { bot: q => (q ? '봇' : '최근 대화'), folder: () => '폴더', cmd: () => '명령', act: () => `「${botName(st.bot) || '봇'}」에 할 일` };
+  const draw = (modal) => {
+    st.items = build();
+    st.sel = Math.max(0, Math.min(st.sel, st.items.length - 1));
+    let last = '';
+    modal.querySelector('[data-list]').innerHTML = st.items.map((it, i) => {
+      const g = group[it.kind](st.q.trim());
+      const head = g !== last ? `<div class="fm-pal-g">${esc(g)}</div>` : '';
+      last = g;
+      const lead = it.kind === 'bot' ? avatarHtml(roster.chars.get(it.id), it.id) : it.kind === 'folder' ? folderThumb(folderById(it.id) || {}) : `<span class="fm-thumb plain">${icon(it.icon)}</span>`;
+      return `${head}<div class="fm-pal-op${i === st.sel ? ' on' : ''}" data-i="${i}" role="option" aria-selected="${i === st.sel}">${lead}<b>${esc(it.text)}</b>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}${i === st.sel && it.kind === 'bot' ? '<em>Enter 찾기 · Tab 할 일</em>' : ''}</div>`;
+    }).join('') || '<div class="fm-empty">맞는 것이 없습니다</div>';
+    modal.querySelector('[data-list] .on')?.scrollIntoView?.({ block: 'nearest' });
+    lazyAvatars(modal.querySelector('[data-list]'));
+    const input = modal.querySelector('input');
+    input.placeholder = st.bot ? `「${botName(st.bot) || '봇'}」에 할 일 · Backspace 뒤로` : '봇·폴더·명령 검색';
+  };
+  const run = await openModal(
+    `<div class="fm-pal"><label class="fm-pal-in">${icon('command')}<input type="text" aria-label="명령 검색" autocomplete="off" spellcheck="false"></label>
+     <div class="fm-pal-list" data-list role="listbox"></div>
+     <div class="fm-pal-ft"><span>↑↓ 이동</span><span>Enter 실행</span><span>Tab 봇에 할 일</span><span>Esc 닫기</span></div></div>`,
+    (modal, close) => {
+      modal.classList.add('fm-palette');
+      const input = modal.querySelector('input');
+      const pick = (i) => {
+        const it = st.items[i];
+        if (!it) return;
+        if (it.kind === 'act') close({ act: it.id, bot: st.bot });
+        else close(it);
+      };
+      input.addEventListener('input', () => { st.q = input.value; st.sel = 0; draw(modal); });
+      input.addEventListener('keydown', (e) => {
+        if (e.isComposing) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); st.sel = (st.sel + (e.key === 'ArrowDown' ? 1 : -1) + st.items.length) % Math.max(1, st.items.length); draw(modal); return; }
+        if (e.key === 'Enter') { e.preventDefault(); pick(st.sel); return; }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const it = st.items[st.sel];
+          if (!st.bot && !e.shiftKey && it && it.kind === 'bot') { st.bot = it.id; st.qSaved = st.q; st.q = ''; input.value = ''; st.sel = 0; draw(modal); }
+          else if (st.bot && e.shiftKey) { st.bot = null; st.q = st.qSaved || ''; input.value = st.q; st.sel = 0; draw(modal); }
+          return;
+        }
+        if (e.key === 'Backspace' && st.bot && !input.value) { e.preventDefault(); st.bot = null; st.q = st.qSaved || ''; input.value = st.q; st.sel = 0; draw(modal); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopPropagation(); close(null); }
+      });
+      modal.querySelector('[data-list]').addEventListener('click', (e) => {
+        const op = e.target.closest('[data-i]');
+        if (!op) return;
+        const it = st.items[+op.dataset.i];
+        if (it && it.kind === 'bot' && !st.bot && e.target.closest('em')) { st.bot = it.id; st.q = ''; input.value = ''; st.sel = 0; draw(modal); return; }
+        pick(+op.dataset.i);
+      });
+      draw(modal);
+      input.focus(); // 바로 이어 친 글자도 받도록 기다리지 않고 포커스
+    },
+  );
+  if (!run) return;
+  if (run.kind === 'cmd') { ACTIONS[run.id]?.(); return; }
+  if (run.kind === 'folder') { openView(run.id); return; }
+  if (run.kind === 'bot') { locateBot(run.id); return; }
+  if (run.act) {
+    const id = run.bot;
+    if (run.act === 'locate') locateBot(id);
+    else if (run.act === 'move') {
+      const target = await pickFolder('봇 옮기기', { mode: 'move', ids: [id] });
+      if (target === '__new__') { ui.selected = new Set([id]); newFolderFromSelection(); }
+      else if (target) save(`${botName(id) || '봇'} → ${folderById(target)?.name || '폴더'}`, (o) => moveBotsToFolder(o, [id], target));
+    } else if (run.act === 'star') favToggleStar(id);
+    else if (run.act === 'label') openLabelPicker([id]);
+    else if (run.act === 'open') { const f = currentModel().folders.find((x) => x.data.includes(id)); if (f) openView(f.id); }
+  }
+}
+
+const PLUS_CSS = `
+.fm-modal.fm-big{width:min(760px,100%)}
+.fm-badge{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--accent-bg);color:var(--accent-2);vertical-align:1px}
+.fm-badge.warn{background:#3a2a14;color:#f0b860}
+.fm-count-note{font-size:12px;color:var(--muted)}
+.fm-modal-actions .fm-spacer{flex:1}
+.fm-cb{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-2);display:inline-grid;place-items:center;flex:none;background:var(--bg)}
+.on>.fm-cb,.fm-lrow.on .fm-cb{background:var(--accent);border-color:var(--accent)}
+.on>.fm-cb::after,.fm-lrow.on .fm-cb::after{content:"";width:8px;height:4px;border:2px solid var(--button-text,#fff);border-top:0;border-right:0;transform:translateY(-1px) rotate(-45deg)}
+.fm-lrow.some .fm-cb{background:var(--accent-bg);border-color:var(--accent)}
+.fm-lrow.some .fm-cb::after{content:"";width:8px;height:2px;background:var(--accent-2)}
+.fm-lrows{display:grid;gap:4px;margin-bottom:8px}
+.fm-lrow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;text-align:left;color:var(--text)}
+.fm-lrows .fm-lrow{border:1px solid var(--line);background:var(--surface)}
+.fm-lrow:hover{background:var(--surface-2)}
+.fm-lrow small{margin-left:auto;font-size:11px;color:var(--faint)}
+.fm-lbl{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;line-height:16px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--c) 28%,transparent);color:color-mix(in srgb,var(--c) 45%,#fff);white-space:nowrap}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-lbl{background:color-mix(in srgb,var(--c) 18%,#fff);color:color-mix(in srgb,var(--c) 75%,#000)}
+.fm-lbl.new{--c:#5f6779}
+.fm-lrows .fm-lbl{font-size:12px;line-height:20px;padding:0 9px}
+.fm-meta .fm-lbls{display:inline-flex;gap:3px;overflow:hidden;flex:0 0 auto;max-width:72%}
+.fm-tagbtn{width:26px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--faint);opacity:0;transition:opacity .12s,background-color .12s}
+.fm-tagbtn .fm-i{width:15px;height:15px}
+.fm-tagbtn.on{opacity:.8;color:var(--accent-2)}
+.fm-card:hover .fm-tagbtn,.fm-card:focus-within .fm-tagbtn,.fm-tagbtn:focus-visible{opacity:1}
+.fm-tagbtn:hover{background:var(--surface-2);color:var(--accent-2)}
+.fm-app.is-reorder .fm-tagbtn{display:none}
+@media (hover:none){.fm-tagbtn{display:none}.fm-tagbtn.on{display:grid;opacity:.8}}
+.fm-lbl-dot{color:var(--c);font-size:14px}
+.fm-lbl-dot i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.fm-lbl-head{padding-left:4px}
+.fm-rail-fold{display:inline-flex;align-items:center;gap:5px;padding:3px 6px;border-radius:6px;font:inherit;letter-spacing:inherit;color:inherit}
+.fm-rail-fold:hover{background:var(--surface-2);color:var(--text)}
+.fm-rail-fold .fm-i{width:12px;height:12px;transition:transform .15s}
+.fm-rail-fold.folded .fm-i{transform:rotate(-90deg)}
+.fm-rail-fold i{font-style:normal;font-weight:600;padding:0 6px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.fm-lbl-chip.folded{border:1px dashed var(--line-2)}
+@media (prefers-reduced-motion:reduce){.fm-rail-fold .fm-i{transition:none}}
+.fm-rail-add{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:var(--faint)}
+.fm-rail-add:hover{background:var(--surface-2);color:var(--text)}
+.fm-rail-add .fm-i{width:13px;height:13px}
+.fm-lab-edit{display:flex;gap:8px;margin-top:10px}
+.fm-modal .fm-lab-emoji{width:64px;text-align:center;font-size:18px}
+.fm-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.fm-chips button{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--muted);background:var(--surface)}
+.fm-chips button.on{border-color:var(--accent);background:var(--accent-bg);color:var(--text);font-weight:650}
+.fm-sub-row{padding-left:14px}
+.fm-sub-row.dim{opacity:.45}
+.fm-snaps{display:grid;gap:8px;position:relative;padding-left:18px}
+.fm-snaps::before{content:"";position:absolute;left:6px;top:10px;bottom:10px;width:2px;background:var(--line-2)}
+.fm-snap{position:relative;display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.fm-snap::before{content:"";position:absolute;left:-17px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+.fm-snap.cur::before{background:var(--accent)}
+.fm-snap.ext::before{border-color:#e0a63a}
+.fm-snap-text{flex:1;min-width:0}
+.fm-snap-text b{font-size:13px}
+.fm-snap-text small{display:block;font-size:11.5px;color:var(--muted)}
+.fm-diff{font-size:11.5px;color:var(--muted);margin-top:2px}
+.fm-diff .p{color:var(--ok)}.fm-diff .m{color:var(--danger)}
+.fm-snap-acts{display:flex;gap:6px;flex:none}
+.fm-dupes,.fm-wzs{display:grid;gap:10px}
+.fm-dupe{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.fm-dupe-h{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface)}
+.fm-dupe-h b{font-size:13.5px}
+.fm-dupe-h small{color:var(--faint);font-size:11.5px}
+.fm-dupe-h .fm-link{margin-left:auto}
+.fm-dupe-row{display:grid;grid-template-columns:auto minmax(0,1.4fr) minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.fm-dupe-row .fm-lrow{padding:4px}
+.fm-dupe-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-dupe-where{display:inline-flex;align-items:center;gap:4px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-dupe-where .fm-i{width:13px;height:13px;flex:none}
+.fm-dupe-last{color:var(--faint);font-size:11.5px;white-space:nowrap}
+.fm-btn.fm-sm{height:28px;padding:0 9px;font-size:11.5px}
+.fm-btn.fm-sm .fm-i{width:13px;height:13px}
+.fm-wz-modes{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;color:var(--muted)}
+.fm-wz{padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.fm-wz.off{opacity:.55}
+.fm-wz-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.fm-wz-h .fm-lrow{padding:4px}
+.fm-wz-h .fm-thumb{width:38px;height:38px;border-radius:11px}
+.fm-wz-t{flex:1;min-width:0}
+.fm-wz-t b{display:block;font-size:13.5px}.fm-wz-t b small{font-weight:400;color:var(--faint);font-size:11.5px}
+.fm-wz-t>small{display:block;color:var(--faint);font-size:11.5px}
+.fm-why{font-size:11px;color:var(--accent-2);background:var(--accent-bg);padding:2px 8px;border-radius:999px;white-space:nowrap}
+.fm-minis{display:flex;flex-wrap:wrap;gap:4px}
+.fm-mini{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-mini.more{padding:3px 9px;color:var(--muted)}
+.fm-av.sm{width:20px;height:20px;border-radius:50%;font-size:9px;flex:none}
+.fm-arch-banner{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 14px;border-radius:12px;border:1px solid #5a4020;background:#1f1b14}
+.fm-arch-banner div{flex:1;min-width:0}
+.fm-arch-banner b{display:block;font-size:13px}
+.fm-arch-banner small{display:block;font-size:11.5px;color:var(--muted)}
+.fm-arch-ic{color:#e0a63a;display:grid}.fm-arch-ic .fm-i{width:24px;height:24px}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-arch-banner{background:#fff6e6;border-color:#e2c48c}
+.fm-arch-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px;max-height:min(52vh,460px);overflow:auto;padding:2px}
+.fm-arch-row{display:flex;align-items:center;gap:9px;height:48px;padding:0 10px;border-radius:11px;background:var(--surface);border:1px solid var(--line);text-align:left}
+.fm-arch-row.on{border-color:var(--accent)}
+.fm-arch-t{min-width:0;flex:1}
+.fm-arch-t b{display:block;font-size:12.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-arch-t small{display:block;font-size:11px;color:var(--faint);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-bis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px}
+.fm-bi{position:relative;padding:10px;border-radius:12px;background:var(--surface);border:1px solid var(--line);text-align:center}
+.fm-bi.off{opacity:.55}
+.fm-bi>.fm-lrow{position:absolute;top:4px;left:4px;padding:4px}
+.fm-bi-row{display:flex;align-items:center;justify-content:center;gap:6px;margin:6px 0}
+.fm-bi-row .fm-thumb{width:44px;height:44px;border-radius:12px}
+.fm-bi-new{background:transparent;overflow:hidden}
+.fm-bi-new img{width:100%;height:100%;object-fit:cover}
+.fm-bi-arrow{color:var(--faint)}
+.fm-bi b{font-size:12.5px;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-bi-alts{display:flex;justify-content:center;gap:4px;margin-top:6px}
+.fm-bi-alts button{width:26px;height:26px;border-radius:7px;overflow:hidden;border:1px solid var(--line-2);padding:0}
+.fm-bi-alts button.on{outline:2px solid var(--accent);outline-offset:1px}
+.fm-bi-alts img{width:100%;height:100%;object-fit:cover;display:block}
+.fm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 12px}
+.fm-stats div{padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.fm-stats small{font-size:11.5px;color:var(--faint)}
+.fm-stats b{display:block;font-size:22px;margin-top:2px}
+.fm-stats b.ok{color:var(--ok)}.fm-stats b.warn{color:#e0a63a}
+.fm-stat-legend{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:11.5px;color:var(--muted);margin-bottom:6px}
+.fm-stat-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.fm-stat-legend small{margin-left:auto;color:var(--faint)}
+.fm-stat-rows{display:grid;gap:2px;max-height:min(46vh,420px);overflow:auto}
+.fm-stat-row{display:grid;grid-template-columns:140px 1fr 64px;align-items:center;gap:10px;padding:5px 6px;border-radius:8px;text-align:left}
+.fm-stat-row:hover{background:var(--surface)}
+.fm-stat-n{display:flex;align-items:center;gap:6px;font-size:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-stat-tr{display:flex;height:12px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+.fm-stat-tr i{display:block}
+.fm-stat-tr .a,.fm-stat-legend .a{background:var(--accent)}
+.fm-stat-tr .s,.fm-stat-legend .s{background:var(--line-2)}
+.fm-stat-v{text-align:right;font-size:11.5px;color:var(--muted)}
+.fm-stat-foot{margin-top:10px}
+.fm-modal-back:has(.fm-palette){place-items:start center;padding-top:9vh}
+.fm-modal.fm-palette{width:min(560px,100%);padding:0;overflow:hidden}
+.fm-pal-in{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.fm-pal-in .fm-i{color:var(--faint)}
+.fm-pal-in input{flex:1;min-width:0;border:0;outline:none;background:transparent;font-size:15px}
+.fm-pal-list{max-height:min(56vh,420px);overflow:auto;padding:4px 0}
+.fm-pal-g{font-size:11px;color:var(--faint);padding:10px 16px 4px}
+.fm-pal-op{display:flex;align-items:center;gap:10px;padding:7px 16px;cursor:pointer}
+.fm-pal-op.on{background:var(--accent-bg)}
+.fm-pal-op .fm-av,.fm-pal-op .fm-thumb{width:26px;height:26px;border-radius:7px;font-size:10px}
+.fm-pal-op .fm-thumb .fm-i{width:15px;height:15px}
+.fm-pal-op b{font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-pal-op small{color:var(--faint);font-size:11.5px;white-space:nowrap}
+.fm-pal-op em{margin-left:auto;font-style:normal;font-size:11px;color:var(--faint);white-space:nowrap}
+.fm-pal-ft{display:flex;flex-wrap:wrap;gap:14px;padding:8px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
+/* 마우스: 봇 칸 버튼은 이름 위에 겹쳐 띄우고(자리 차지 안 함), 켜진 별·라벨만 늘 보인다 */
+@media (hover:hover){
+  .fm-card,.view-list .fm-card{grid-template-columns:34px minmax(0,1fr)}
+  .view-list .fm-card{grid-template-columns:30px minmax(0,1fr)}
+  .fm-acts{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding-left:16px;background:linear-gradient(90deg,transparent,var(--surface) 16px);border-radius:0 9px 9px 0}
+  .fm-card.sel .fm-acts{background:linear-gradient(90deg,transparent,var(--accent-bg) 16px)}
+  .fm-acts>*{display:none}
+  .fm-acts>.on,.fm-card:hover .fm-acts>*,.fm-card:focus-within .fm-acts>*{display:grid}
+  .fm-card:not(:hover):not(:focus-within) .fm-acts:not(:has(>.on)){display:none}
+  .fm-app.is-reorder .fm-acts{display:none}
+}
+.fm-kbd{font-size:10.5px;padding:0 5px;border-radius:5px;border:1px solid var(--line-2);color:var(--faint);margin-left:4px}
+.fm-search .fm-kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);margin:0;line-height:18px;background:var(--surface)}
+.fm-search .fm-kbd:hover{color:var(--text);border-color:var(--accent)}
+.fm-top .fm-search input{padding-right:58px}
+.fm-search:focus-within .fm-kbd{display:none}
+@media (max-width:640px){
+  .fm-stats{grid-template-columns:repeat(2,1fr)}
+  .fm-stat-row{grid-template-columns:96px 1fr 54px}
+  .fm-dupe-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:2px}
+  .fm-dupe-where,.fm-dupe-last{grid-column:2}
+  .fm-snap{flex-wrap:wrap}.fm-snap-acts{width:100%;justify-content:flex-end}
+  .fm-arch-banner{flex-wrap:wrap}.fm-arch-banner .fm-btn{flex:1}
+  .fm-pal-ft{display:none}
+}
+`;
+
+// 설정 창의 보관함 칸.
+function archiveSettingsHtml(d) {
+  return `<span class="fm-label">보관함 제안</span>
+     <div class="fm-set-row"><div><b>📦 오래된 봇 보관함 제안</b><small>첫 화면 위에 한 줄 띠로 알려 주기만 합니다. 자동으로 옮기지 않습니다.</small></div>${favSwitchHtml(d.archOn, 'data-arch-on', '보관함 제안 켜기/끄기')}</div>
+     <div class="fm-set-row fm-sub-row" data-arch-only><div><b>기준</b><small>이 기간 넘게 대화하지 않은 봇</small></div><div class="fm-fav-sort" role="group">${[30, 60, 90].map((n) => `<button data-arch-days="${n}">${n}일</button>`).join('')}</div></div>`;
+}
+
+function archiveSettingsBind(modal, d) {
+  const sync = () => {
+    const sw = modal.querySelector('[data-arch-on]');
+    sw.classList.toggle('on', d.archOn);
+    sw.setAttribute('aria-checked', String(d.archOn));
+    modal.querySelectorAll('[data-arch-only]').forEach((el) => el.classList.toggle('dim', !d.archOn));
+    modal.querySelectorAll('[data-arch-days]').forEach((b) => { const on = +b.dataset.archDays === d.archDays; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  };
+  modal.querySelector('[data-arch-on]').onclick = () => { d.archOn = !d.archOn; sync(); };
+  modal.querySelectorAll('[data-arch-days]').forEach((b) => { b.onclick = () => { d.archDays = +b.dataset.archDays; sync(); }; });
+  sync();
+}
+
+async function archiveSettingsSave(d) {
+  const a = plusStore.state.archive;
+  if (d.archOn !== a.on || d.archDays !== a.days) await plusStore.change({ k: 'archive', set: { on: d.archOn, days: d.archDays, snooze: d.archOn && !a.on ? 0 : a.snooze } });
+}
+
 // ── src/ui/app.js ──
 // 관리 화면. 상태(ui) → render() 로 다시 그리고, 이벤트는 루트에 한 번만 단다.
 
@@ -2543,7 +4372,7 @@ function folderThumb(folder, cls = '') {
 }
 
 function avatarHtml(c, id) {
-  const initial = esc((c ? c.name : '?').trim().charAt(0) || '?');
+  const initial = esc(((c ? c.name : '') || '').match(/[\p{L}\p{N}]/u)?.[0] || '?');
   if (!c || !c.image) return `<div class="fm-av">${initial}</div>`;
   const src = avatars.peek(c.image);
   if (src) return `<div class="fm-av">${initial}<img src="${esc(src)}" alt=""></div>`;
@@ -2559,7 +4388,9 @@ function cardHtml(id, container) {
     if (c.group) meta.push(`<span title="그룹 채팅">${icon('users')}</span>`);
     if (c.modules) meta.push(`<span class="fm-extra" title="모듈 ${c.modules}개">${icon('puzzle')}${c.modules}</span>`);
     if (c.assets) meta.push(`<span class="fm-extra" title="에셋 ${c.assets}개">${icon('image')}${c.assets}</span>`);
-    if (container === VIEW_STARS) meta.unshift(`<span class="fm-fav-where" title="원래 위치">${icon('folder')}${esc(favFolderName(id))}</span>`);
+    if (container === VIEW_STARS || isLabelView(container)) meta.unshift(`<span class="fm-fav-where" title="원래 위치">${icon('folder')}${esc(favFolderName(id))}</span>`);
+    const lbls = labelChipsHtml(id);
+    if (lbls) meta.unshift(`<span class="fm-lbls">${lbls}</span>`);
   } else if (roster.missing.has(id)) meta.push('<span>캐릭터가 지워졌습니다</span>');
   else if (roster.failed.has(id)) meta.push(`<button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
   if (c && roster.failed.has(id)) meta.unshift(`<span class="fm-warn">갱신 실패</span><button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
@@ -2570,7 +4401,7 @@ function cardHtml(id, container) {
   const state = ghost ? ' ghost-bot' : failed ? ' failed' : !c ? ' loading' : '';
   return `<div class="fm-card${selected ? ' sel' : ''}${state}" data-id="${esc(id)}" data-container="${esc(container)}" title="${esc(c ? c.name : id)}" tabindex="0" role="checkbox" aria-checked="${selected}" aria-label="${esc(name)}">
     ${avatarHtml(c, id)}<div class="fm-txt"><div class="fm-name">${esc(name)}</div><div class="fm-meta">${meta.join('')}</div></div>
-    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}${favStarButton(id)}</div></div>`;
+    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}${labelButtonHtml(id)}${favStarButton(id)}</div></div>`;
 }
 
 function gridHtml(ids, container, emptyText, filter = true) {
@@ -2601,6 +4432,7 @@ function renderRail() {
     nav(`data-view="${VIEW_ALL}"`, `<span class="fm-thumb plain">${icon('layers')}</span>`, '모든 폴더', folders.length, ui.view === VIEW_ALL ? ' on' : ''),
     nav(`data-view="${ROOT}" data-drop="${ROOT}"`, `<span class="fm-thumb plain">${icon('inbox')}</span>`, '폴더 밖', root.length, ui.view === ROOT ? ' on' : ''),
     favRailHtml({ folders, root }, nav),
+    labelRailHtml(nav),
     `<div class="fm-rail-label"><span>폴더 ${folders.length}</span></div>`,
     ...folders.map((f) =>
       nav(`data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}"`, folderThumb(f), f.name || '이름 없음', f.data.length,
@@ -2616,6 +4448,7 @@ function backButton(thumb) {
 
 function headHtml(model) {
   if (ui.view === VIEW_STARS) return favHeadHtml();
+  if (isLabelView(ui.view)) return labelHeadHtml();
 
   const all = model.folders.reduce((n, f) => n + f.data.length, 0) + model.root.length;
   const scope = ui.query ? '검색 결과 전체' : ui.view === ROOT ? '폴더 밖 전체' : '이 폴더 전체';
@@ -2646,13 +4479,15 @@ function headHtml(model) {
 
 function renderMain(keepScroll) {
   const model = currentModel();
-  if (ui.view !== VIEW_ALL && ui.view !== ROOT && ui.view !== VIEW_STARS && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
+  const labelOk = isLabelView(ui.view) && (ui.view === VIEW_LABEL + LABEL_NEW || !!labelDef(ui.view.slice(VIEW_LABEL.length)));
+  if (ui.view !== VIEW_ALL && ui.view !== ROOT && ui.view !== VIEW_STARS && !labelOk && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
   ui.visible = [];
   const head = ui.app.querySelector('.fm-head');
   head.innerHTML = headHtml(model);
   head.classList.toggle('compact', ui.view === VIEW_ALL || ui.view === ROOT || !!ui.reorder);
   let html = '';
   if (ui.view === VIEW_ALL && !ui.query) {
+    html += archiveBannerHtml();
     html += favHomeHtml(model);
     const tiles = model.folders.map(folderTileHtml).join('');
     html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${model.folders.length}</span></div>
@@ -2675,6 +4510,8 @@ function renderMain(keepScroll) {
     const unread = roster.mode === 'single' ? roster.ids.filter((id) => !roster.resolved(id)).length : 0;
     if (unread) html += `<p class="fm-note">아직 이름을 읽지 않은 봇 ${unread}개는 검색에 나오지 않습니다. <button class="fm-link" data-act="load-all">모두 읽기</button></p>`;
     if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더나 봇이 없습니다</div>`;
+  } else if (isLabelView(ui.view)) {
+    html += labelViewHtml();
   } else {
     const inRoot = ui.view === ROOT;
     const stars = ui.view === VIEW_STARS;
@@ -2742,6 +4579,7 @@ function render(keepScroll = false) {
 function viewIds() {
   if (ui.view === VIEW_ALL) return null;
   if (ui.view === VIEW_STARS) return new Set(favStarIds());
+  if (isLabelView(ui.view)) return new Set(labelBotIds(ui.view.slice(VIEW_LABEL.length)));
   const m = currentModel();
   return new Set(ui.view === ROOT ? m.root : (m.folders.find((f) => f.id === ui.view)?.data || []));
 }
@@ -3266,12 +5104,14 @@ async function loadPrefs() {
     ui.loadAll = !!(saved && saved.loadAll);
     if (saved && FAV_SORTS.some(([k]) => k === saved.favSort)) fav.sort = saved.favSort;
     fav.fold = !!(saved && saved.favFold);
+    if (saved && ['recent', 'order'].includes(saved.labelSort)) labelUi.sort = saved.labelSort;
+    labelUi.fold = !(saved && saved.labelFold === false);
   } catch {}
   await favLoad();
 }
 
 function savePrefs() {
-  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold }); } catch {}
+  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold, labelSort: labelUi.sort, labelFold: labelUi.fold }); } catch {}
 }
 
 // ── 껍데기·이벤트 ──
@@ -3280,7 +5120,7 @@ function shellHtml() {
   return `<div class="fm-root"><div class="fm-app view-${ui.display}">
     <header class="fm-top">
       <div class="fm-brand"><span class="fm-logo">${icon('folder')}</span><div><b>Risu 폴더 마스터</b><small>v${FM_VERSION}</small></div></div>
-      <label class="fm-search">${icon('search')}<input type="search" placeholder="봇·폴더 이름 검색" aria-label="봇과 폴더 검색"></label>
+      <label class="fm-search">${icon('search')}<input type="search" placeholder="봇·폴더 이름 검색" aria-label="봇과 폴더 검색"><button class="fm-kbd fm-only-desktop" data-act="palette" title="명령 창 (Ctrl+K)" tabindex="-1">Ctrl K</button></label>
       <span class="fm-spacer"></span>
       <span class="fm-busy">저장 중</span>
       <button class="fm-loading" data-act="roster-retry" disabled>봇 정보 불러오는 중</button>
@@ -3296,7 +5136,14 @@ function shellHtml() {
           <button data-display="tiles" class="fm-only-mobile">${icon('tiles')}작은 타일</button>
           <button data-display="list" class="fm-only-mobile">${icon('list')}목록</button>
           <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
+          <button data-act="palette">${icon('command')}명령 창<small>Ctrl K</small></button>
           <button data-act="check">${icon('scan')}정리 점검</button>
+          <button data-act="wizard">${icon('wand')}정리 마법사</button>
+          <button data-act="dups">${icon('copy')}중복 봇 찾기</button>
+          <button data-act="archive">${icon('box')}보관함 정리</button>
+          <button data-act="icons">${icon('image')}폴더 그림 한 번에</button>
+          <button data-act="snapshots">${icon('history')}배치 기록</button>
+          <button data-act="stats">${icon('chart')}통계</button>
           <button data-act="reload">${icon('refresh')}새로 불러오기</button>
           <button data-act="fav-view">${icon('star')}즐겨찾는 봇</button>
           <button data-act="settings">${icon('gear')}설정 · 테마</button>
@@ -3316,6 +5163,7 @@ function shellHtml() {
           <button class="fm-btn primary fm-norm" data-act="move">${icon('folder')}폴더로 옮기기</button>
           <button class="fm-btn fm-norm" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
           <button class="fm-btn fm-norm" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
+          <button class="fm-btn fm-icon fm-norm" data-act="tag-selected" title="선택한 봇에 라벨 붙이기" aria-label="선택한 봇에 라벨 붙이기">${icon('tag')}</button>
           <button class="fm-btn fm-icon fm-norm" data-act="fav-selected" title="선택한 봇 즐겨찾기 추가 / 해제" aria-label="선택한 봇 즐겨찾기 추가 / 해제">${icon('star')}</button>
           <button class="fm-btn ghost fm-icon fm-norm" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
         </div>
@@ -3334,7 +5182,7 @@ function startLoadAllIfWanted() {
 async function openSettings() {
   const originalTheme=plus.theme;
   let loadAll = !!ui.loadAll;
-  let sidebarFav = fav.folder.on;
+  const draft = { ...plusSidebarDraft(), solo: labelStore.state.opts.solo, finish: labelStore.state.opts.finish, archOn: plusStore.state.archive.on, archDays: plusStore.state.archive.days };
   const official = roster.mode === 'full';
   const result = await openModal(
     `<h3 id="fm-dialog-title">설정</h3>
@@ -3345,8 +5193,9 @@ async function openSettings() {
        <button class="fm-option" data-load="all">열 때 모두 한 번에<small>검색·점검이 바로 됨</small></button>
      </div>
      <p class="fm-note" data-load-note></p>
-     <span class="fm-label">즐겨찾기</span>
-     <div class="fm-set-row"><div><b>사이드바 즐겨찾기 폴더</b><small>RisuAI 사이드바 맨 위에 즐겨찾는 봇의 바로가기 폴더를 둡니다. 봇은 복사되지 않습니다.</small></div>${favSwitchHtml(sidebarFav, 'data-sidefav', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
+     ${plusSidebarSettingsHtml(draft)}
+     ${labelSettingsHtml(draft)}
+     ${archiveSettingsHtml(draft)}
      <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>저장</button></div>`,
     (modal, close) => {
       const sync = () => {
@@ -3360,16 +5209,19 @@ async function openSettings() {
       };
       modal.querySelectorAll('[data-theme]').forEach(b=>{b.onclick=()=>{plusApplyTheme(b.dataset.theme);modal.querySelectorAll('[data-theme]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})}});
       modal.querySelectorAll('[data-load]').forEach((b) => { b.onclick = () => { loadAll = b.dataset.load === 'all'; sync(); }; });
-      const sw = modal.querySelector('[data-sidefav]');
-      sw.onclick = () => { sidebarFav = !sidebarFav; sw.classList.toggle('on', sidebarFav); sw.setAttribute('aria-checked', String(sidebarFav)); };
+      plusSidebarSettingsBind(modal, draft);
+      labelSettingsBind(modal, draft);
+      archiveSettingsBind(modal, draft);
       modal.querySelector('[data-x]').onclick = () => close(null);
-      modal.querySelector('[data-ok]').onclick = () => close({ loadAll, sidebarFav });
+      modal.querySelector('[data-ok]').onclick = () => close({ loadAll });
       sync();
     },
   );
   if (!result) {plusApplyTheme(originalTheme);return;}
   await plusPersist();
-  if (result.sidebarFav !== fav.folder.on) await shortcutToggle(result.sidebarFav);
+  await plusSidebarSave(draft);
+  await labelSettingsSave(draft);
+  await archiveSettingsSave(draft);
   const turnedOn = result.loadAll && !ui.loadAll;
   ui.loadAll = result.loadAll;
   savePrefs();
@@ -3481,15 +5333,16 @@ function onFolderMenuKey(e) { if (e.key === 'Escape') { e.stopPropagation(); clo
 
 function openFolderMenu(fid, x, y) {
   const fav = fid === VIEW_STARS;
-  const f = fav ? { id: VIEW_STARS, name: favFolderTitle() } : folderById(fid);
+  const lab = isLabelView(fid) ? labelDef(fid.slice(VIEW_LABEL.length)) : null;
+  const f = fav ? { id: VIEW_STARS, name: favFolderTitle() } : lab ? { id: fid, name: labelText(lab) } : folderById(fid);
   if (!f || ui.reorder || document.querySelector('.fm-modal-back')) return;
   closeFolderMenu();
   ui.menuAt = Date.now();
   const el = document.createElement('div');
   el.className = 'fm-ctx';
   el.setAttribute('role', 'menu');
-  const items = fav ? favMenuItems() : FOLDER_ITEMS;
-  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' ? ' class="danger"' : ''}>${icon(i)}${fav ? t : folderItemLabel(a, t, f.id)}</button>`).join('');
+  const items = fav ? favMenuItems() : lab ? labelMenuItems(lab.id) : FOLDER_ITEMS;
+  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' || a === 'label-delete' ? ' class="danger"' : ''}>${icon(i)}${fav || lab ? t : folderItemLabel(a, t, f.id)}</button>`).join('');
   document.body.append(el);
   const w = el.offsetWidth;
   const h = el.offsetHeight;
@@ -3499,7 +5352,7 @@ function openFolderMenu(fid, x, y) {
     const b = e.target.closest('[data-a]');
     if (!b) return;
     closeFolderMenu();
-    if (fav) runFavMenuAction(b.dataset.a); else runFolderAction(b.dataset.a, fid);
+    if (fav) runFavMenuAction(b.dataset.a); else if (lab) runLabelMenuAction(b.dataset.a, lab.id); else runFolderAction(b.dataset.a, fid);
   });
   document.addEventListener('pointerdown', onFolderMenuOutside, true);
   document.addEventListener('keydown', onFolderMenuKey, true);
@@ -3507,6 +5360,8 @@ function openFolderMenu(fid, x, y) {
 }
 
 function folderOf(target) {
+  const lab = target.closest?.('.fm-rail .fm-nav[data-label], .fm-head-text[data-label]');
+  if (lab) return labelDef(lab.dataset.label) ? VIEW_LABEL + lab.dataset.label : null;
   const el = target.closest?.('.fm-ftile[data-folder], .fm-rail .fm-nav[data-view], [data-fav-menu]');
   if (!el) return null;
   if (el.hasAttribute('data-fav-menu') || el.dataset.view === VIEW_STARS) return VIEW_STARS;
@@ -3556,7 +5411,7 @@ const ACTIONS = {
   check: () => runCheck(),
   reload: () => reload(),
   sidebar: () => openSidebarDialog(),
-  reorder: () => { if (ui.view === VIEW_STARS) openView(VIEW_ALL); return startReorder(); },
+  reorder: () => { if (ui.view === VIEW_STARS || isLabelView(ui.view)) openView(VIEW_ALL); return startReorder(); },
   'reorder-save': () => finishReorder(),
   'reorder-cancel': () => cancelReorder(),
   'select-all': () => selectAllVisible(),
@@ -3578,6 +5433,17 @@ const ACTIONS = {
   'fav-folder-toggle': () => favFolderToggle(),
   'fav-folder-rename': () => shortcutRename(),
   'fav-folder-image': () => shortcutImage(),
+  palette: () => openPalette(),
+  wizard: () => openWizard(),
+  dups: () => openDuplicates(),
+  archive: () => openArchive(),
+  'archive-snooze': () => archiveSnooze(),
+  snapshots: () => openSnapshots(),
+  icons: () => openBatchIcons(),
+  stats: () => openStats(),
+  'label-new': () => editLabelDialog(null),
+  'label-edit': () => { const d = labelDef(ui.view.slice(VIEW_LABEL.length)); if (d) editLabelDialog(d); },
+  'tag-selected': () => openLabelPicker([...ui.selected]),
 };
 
 function bindEvents(root) {
@@ -3609,6 +5475,11 @@ function bindEvents(root) {
     if (retry) { rosterRetry([retry.dataset.retry]); return; }
     const star = t.closest('[data-star]');
     if (star) { if (!ui.reorder) favToggleStar(star.dataset.star); return; }
+    const tag = t.closest('[data-tag]');
+    if (tag) { if (!ui.reorder) openLabelPicker([tag.dataset.tag]); return; }
+    const lsort = t.closest('[data-label-sort]');
+    if (lsort) { labelUi.sort = lsort.dataset.labelSort; savePrefs(); renderMain(true); return; }
+    if (t.closest('[data-label-fold]')) { labelUi.fold = !labelUi.fold; savePrefs(); renderRail(); ui.app.querySelector('.fm-rail [data-label-fold]:not([hidden])')?.focus({ preventScroll: true }); return; }
     const sort = t.closest('[data-fav-sort]');
     if (sort) { fav.sort = sort.dataset.favSort; savePrefs(); renderMain(true); return; }
     if (t.closest('[data-fav-fold]')) { fav.fold = !fav.fold; savePrefs(); renderMain(true); return; }
@@ -3659,6 +5530,7 @@ function bindEvents(root) {
     ui.escBound = true;
     // 포커스가 문서 본문에 있어도 받도록 문서 전체에서 듣는다. 대화상자가 열려 있으면 그쪽이 먼저 처리한다.
     document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k' && ui.app && !drag.active && !document.querySelector('.fm-modal-back')) { e.preventDefault(); openPalette(); return; }
       if (e.key !== 'Escape' || !ui.app || document.querySelector('.fm-modal-back') || drag.active) return;
       const menu = ui.app.querySelector('.fm-menu');
       if (menu.classList.contains('open')) menu.classList.remove('open');
@@ -3677,18 +5549,24 @@ async function openManager() {
   ui.session = (ui.session || 0) + 1;
   try {
     await loadPrefs();
+    await shortcutReloadStores();
     ui.order = await readOrder();
     // 사이드바 즐겨찾기 폴더: 사이드바에서 고친 것·다른 기기 변경을 맞추고(꺼져 있는데 남아 있으면 지운다) 감시를 시작한다.
     try { if (await saver.syncShortcut() === 'written') ui.order = await readOrder(); } catch (err) { console.log('[risu-folder-master] 즐겨찾기 폴더 맞추기 실패: ' + errorText(err)); }
     shortcutPollStart();
-    if (fav.folder.on) shortcutGuard();
+    if (shortcutAnyOn()) shortcutGuard();
+    recentWatchStart();
+    await labelSeenLoad();
+    await snapLoad();
+    snapCheckExternal(ui.order);
+    saver.onCommitted = (label, next) => { try { snapPush('auto', label, next); } catch {} };
     roster.onUpdate = onRosterUpdate;
     ui.grid = await loadGrid();
     ui.selected.clear();
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
-    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}</style>${shellHtml()}`;
+    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}${PLUS_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);
     bindEvents(document.querySelector('.fm-root'));

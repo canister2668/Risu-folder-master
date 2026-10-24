@@ -14,6 +14,7 @@ const PLUGIN_NAME = 'risu_folder_master';
 const fav = { stars: [], pins: [], folder: favFolderNorm(null), sort: 'added', fold: false };
 let favQueue = Promise.resolve();
 let favPollTimer = null;
+let favPollIdle = false;
 // 해적판은 setItem 이 서버에 늦게 반영되어 바로 읽으면 옛 값이 온다. 아직 반영 안 된 내 변경을 기억해 읽을 때마다 다시 얹는다.
 const favPending = [];
 const FAV_PENDING_MS = 60000;
@@ -36,8 +37,9 @@ function favRecord(v) {
   return { stars: favNorm(o.stars), pins: favNorm(o.pins), folder: favFolderNorm(o.folder) };
 }
 
-function shortcutOpts() {
-  return { on: fav.folder.on, stars: fav.stars, name: fav.folder.name, imgFile: fav.folder.imgFile };
+// 즐겨찾기 바로가기 폴더 한 칸(sidebarplus.js 의 shortcutOpts 가 최근 대화·라벨 폴더와 함께 모은다).
+function favShortcutItem() {
+  return fav.folder.on ? { id: SHORTCUT_ID, name: fav.folder.name || SHORTCUT_NAME, color: 'yellow', imgFile: fav.folder.imgFile, ids: fav.stars } : null;
 }
 
 function favReflected(state, op) {
@@ -95,41 +97,52 @@ function favChange(op) {
     favPending.push({ op, at: Date.now() });
     await Risuai.pluginStorage.setItem(FAV_KEY, next);
     Object.assign(fav, next);
-    if (shortcutState.dbOk && (fav.folder.on || op.key === 'folder')) await saver.syncShortcut();
-    if (op.key === 'folder') await shortcutGuard();
+    if (shortcutState.dbOk && (shortcutAnyOn() || op.key === 'folder')) await saver.syncShortcut();
+    await shortcutGuard();
   }).catch((err) => toast('즐겨찾기를 저장하지 못했습니다: ' + errorText(err), { error: true })).then(() => render(true));
   return favQueue;
 }
 
 // ── 사이드바 바로가기 폴더 ──
 
-// 사이드바에서 바로가기 폴더(맨 위 폴더)를 끌 수 없게 한다. Chromium 계열만 막히고, 오른쪽 클릭 메뉴(이름·색·그림)는
+// 사이드바에서 바로가기 폴더(맨 위 폴더들)를 끌 수 없게 한다. Chromium 계열만 막히고, 오른쪽 클릭 메뉴(이름·색·그림)는
 // 막을 수 없으므로 그 밖의 손질은 syncShortcut 이 되돌린다. CSS 는 DOMPurify 를 거치므로 < > & 를 쓰지 않는다.
-function shortcutGuardCSS() {
+function shortcutGuardCSS(count = 1) {
   return SIDEBAR_SCROLL.split(',').map((sel) => {
-    const top = `${sel.trim()} .group:not(.z-10):nth-child(1 of .group)`;
+    const top = `${sel.trim()} .group:not(.z-10):nth-child(-n+${count} of .group)`;
     return `${top},${top} *,${top} + .rounded-lg *{-webkit-user-drag:none!important}\n${top} + .rounded-lg .h-4{pointer-events:none!important}`;
   }).join('\n');
 }
 
 async function shortcutGuard() {
-  const on = fav.folder.on && fav.stars.length > 0;
+  const count = shortcutCount();
   try {
-    const doc = on ? await Risuai.getRootDocument() : rootDoc;
+    const doc = count ? await Risuai.getRootDocument() : rootDoc;
     if (!doc) return;
     rootDoc = doc;
-    await setRootStyle(doc, SHORTCUT_GUARD_XID, on ? shortcutGuardCSS() : '');
+    await setRootStyle(doc, SHORTCUT_GUARD_XID, count ? shortcutGuardCSS(count) : '');
   } catch {}
 }
 
 // 창을 한 번 연 뒤(DB 권한을 이미 받은 뒤)에만 돈다. 다른 기기에서 바꾼 즐겨찾기도 다시 읽어 맞춘다.
 function shortcutPollStart() {
-  if (favPollTimer || !fav.folder.on || !shortcutState.dbOk) return;
+  // 모두 꺼져 있어도 쉬는 상태로 시작한다(다른 기기에서 켜면 알아채도록). 데이터 권한을 받은 뒤에만.
+  if (favPollTimer || !shortcutState.dbOk) return;
+  favPollIdle = !shortcutAnyOn();
+  let idle = 0;
   favPollTimer = setInterval(async () => {
     try {
+      // 모두 꺼져 있으면 설정만 가끔(약 30초마다) 다시 읽는다. 다른 기기에서 다시 켜면 여기서 알아챈다.
+      if (favPollIdle && ++idle % 8) return;
       Object.assign(fav, (await favRead()).state);
-      if (!fav.folder.on) { shortcutPollStop(); await saver.syncShortcut(); return; }
-      if (await saver.syncShortcut() === 'written' && ui.app) { ui.order = await readOrder(); render(true); }
+      await shortcutReloadStores();
+      recentWatchSync();
+      if (!shortcutAnyOn()) {
+        if (!favPollIdle) { favPollIdle = true; await saver.syncShortcut(); await shortcutGuard(); }
+        return;
+      }
+      if (favPollIdle) { favPollIdle = false; idle = 0; }
+      if (await saver.syncShortcut() === 'written') { await shortcutGuard(); if (ui.app) { ui.order = await readOrder(); render(true); } }
     } catch {}
   }, FAV_POLL_MS);
 }
@@ -137,11 +150,14 @@ function shortcutPollStart() {
 function shortcutPollStop() {
   clearInterval(favPollTimer);
   favPollTimer = null;
+  favPollIdle = false;
 }
 
 async function shortcutStartup() {
   await favLoad();
-  if (fav.folder.on) await shortcutGuard();
+  await shortcutReloadStores();
+  if (shortcutAnyOn()) await shortcutGuard();
+  recentWatchStart();
 }
 
 // 플러그인을 지우거나 끌 때 바로가기 폴더를 지운다. RisuAI는 목록에서 먼저 빼고 플러그인을 다시 불러오므로,
@@ -149,7 +165,8 @@ async function shortcutStartup() {
 // 호스트가 정리를 1초까지만 기다리므로 권한 창이 필요하면(3일 지남) 정리하지 못할 수 있다. 확실히 지우려면 먼저 옵션을 끈다.
 async function shortcutUnloadCleanup() {
   shortcutPollStop();
-  if (!fav.folder.on) return;
+  recentWatchStop();
+  if (!shortcutAnyOn()) return;
   const db = await Risuai.getDatabase(['plugins', 'characterOrder']);
   if (!db) return;
   const me = (Array.isArray(db.plugins) ? db.plugins : []).find((p) => p && p.name === PLUGIN_NAME);
@@ -162,7 +179,7 @@ async function shortcutUnloadCleanup() {
 async function shortcutToggle(on) {
   if (on && !fav.stars.length) toast('즐겨찾는 봇이 생기면 사이드바 맨 위에 폴더가 생깁니다');
   await favChange({ key: 'folder', set: { on } });
-  if (on) shortcutPollStart(); else shortcutPollStop();
+  if (shortcutAnyOn()) shortcutPollStart(); // 모두 끄면 감시는 저절로 쉬는 상태가 된다(다른 기기에서 다시 켜면 알아챔)
   toast(on ? '사이드바 맨 위에 즐겨찾기 폴더를 만들었습니다' : '사이드바 즐겨찾기 폴더를 지웠습니다');
 }
 

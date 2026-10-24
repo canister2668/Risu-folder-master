@@ -36,6 +36,9 @@ function rawFor(base, raw) {
 function summarizeCharacter(c) {
   const assets = Array.isArray(c.additionalAssets) ? c.additionalAssets.length : 0;
   const modules = Array.isArray(c.modules) ? c.modules.length : 0;
+  const creator = typeof c.creator === 'string' && c.creator.trim() ? c.creator.trim() : typeof c.additionalData?.creator === 'string' ? c.additionalData.creator.trim() : '';
+  const tagSrc = Array.isArray(c.tags) && c.tags.length ? c.tags : Array.isArray(c.additionalData?.tag) ? c.additionalData.tag : [];
+  const tags = tagSrc.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 40)).slice(0, 12);
   return {
     id: c.chaId,
     name: typeof c.name === 'string' && c.name ? c.name : '이름 없음',
@@ -44,6 +47,8 @@ function summarizeCharacter(c) {
     last: Number(c.lastInteraction) || 0,
     assets,
     modules,
+    creator: creator.slice(0, 60),
+    tags,
   };
 }
 
@@ -52,6 +57,7 @@ const saver = {
   history: [],
   pending: 0,
   onBusy: () => {},
+  onCommitted: () => {},
 
   run(task) {
     const job = this.queue.then(task);
@@ -116,6 +122,7 @@ const saver = {
         }
         this.history.push({ label, before, after: next });
         if (this.history.length > HISTORY_LIMIT) this.history.shift();
+        this.onCommitted(label, next);
         return next;
       }
       throw new Error('다른 곳에서 순서가 계속 바뀌고 있어 저장하지 않았습니다. 잠시 뒤 다시 해 주세요');
@@ -138,6 +145,7 @@ const saver = {
         throw new Error('그 뒤에 다른 곳에서 순서가 바뀌어 되돌릴 수 없습니다');
       }
       this.history.pop();
+      if (result === 'ok') this.onCommitted(`되돌림: ${entry.label}`, entry.before);
       if (result === 'drift') this.warning = '되돌린 직후 다른 곳에서 순서가 바뀌었습니다. 목록을 확인해 주세요';
       return entry;
     });

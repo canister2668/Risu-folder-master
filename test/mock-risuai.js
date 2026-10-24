@@ -14,6 +14,8 @@
     customCSS: window.__legacyCSS || '',
     plugins: [{ name: 'risu_folder_master', enabled: true }],
   };
+  // 시험별 추가 봇: window.__extraChars = [{ chaId, name, lastInteraction, creator, tags }] → 폴더 밖 끝에 붙는다.
+  for (const c of window.__extraChars || []) { chars.push({ image: '', type: 'character', additionalAssets: [], modules: [], ...c }); db.characterOrder.push(c.chaId); }
   const store = new Map(Object.entries(window.__storeSeed || {}));
   const local = new Map(Object.entries(window.__localSeed || {}));
   window.__local = local;
@@ -35,6 +37,8 @@
       const c = db.characters.find((x) => x.chaId === t);
       return c ? JSON.parse(JSON.stringify(c)) : null;
     },
+    getCurrentCharacterIndex: async () => (typeof window.__curIdx === 'number' ? window.__curIdx : -1),
+    getCharacter: async () => JSON.parse(JSON.stringify(db.characters[window.__curIdx] ?? null)),
     registerSetting: async (n, cb) => { window.__open = cb; return { id: 'x' }; },
     registerButton: async (a, cb) => ({ id: 'y' }),
     onUnload: async (cb) => { window.__unload = cb; },

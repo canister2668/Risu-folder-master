@@ -64,7 +64,7 @@ function folderThumb(folder, cls = '') {
 }
 
 function avatarHtml(c, id) {
-  const initial = esc((c ? c.name : '?').trim().charAt(0) || '?');
+  const initial = esc(((c ? c.name : '') || '').match(/[\p{L}\p{N}]/u)?.[0] || '?');
   if (!c || !c.image) return `<div class="fm-av">${initial}</div>`;
   const src = avatars.peek(c.image);
   if (src) return `<div class="fm-av">${initial}<img src="${esc(src)}" alt=""></div>`;
@@ -80,7 +80,9 @@ function cardHtml(id, container) {
     if (c.group) meta.push(`<span title="그룹 채팅">${icon('users')}</span>`);
     if (c.modules) meta.push(`<span class="fm-extra" title="모듈 ${c.modules}개">${icon('puzzle')}${c.modules}</span>`);
     if (c.assets) meta.push(`<span class="fm-extra" title="에셋 ${c.assets}개">${icon('image')}${c.assets}</span>`);
-    if (container === VIEW_STARS) meta.unshift(`<span class="fm-fav-where" title="원래 위치">${icon('folder')}${esc(favFolderName(id))}</span>`);
+    if (container === VIEW_STARS || isLabelView(container)) meta.unshift(`<span class="fm-fav-where" title="원래 위치">${icon('folder')}${esc(favFolderName(id))}</span>`);
+    const lbls = labelChipsHtml(id);
+    if (lbls) meta.unshift(`<span class="fm-lbls">${lbls}</span>`);
   } else if (roster.missing.has(id)) meta.push('<span>캐릭터가 지워졌습니다</span>');
   else if (roster.failed.has(id)) meta.push(`<button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
   if (c && roster.failed.has(id)) meta.unshift(`<span class="fm-warn">갱신 실패</span><button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
@@ -91,7 +93,7 @@ function cardHtml(id, container) {
   const state = ghost ? ' ghost-bot' : failed ? ' failed' : !c ? ' loading' : '';
   return `<div class="fm-card${selected ? ' sel' : ''}${state}" data-id="${esc(id)}" data-container="${esc(container)}" title="${esc(c ? c.name : id)}" tabindex="0" role="checkbox" aria-checked="${selected}" aria-label="${esc(name)}">
     ${avatarHtml(c, id)}<div class="fm-txt"><div class="fm-name">${esc(name)}</div><div class="fm-meta">${meta.join('')}</div></div>
-    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}${favStarButton(id)}</div></div>`;
+    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}${labelButtonHtml(id)}${favStarButton(id)}</div></div>`;
 }
 
 function gridHtml(ids, container, emptyText, filter = true) {
@@ -122,6 +124,7 @@ function renderRail() {
     nav(`data-view="${VIEW_ALL}"`, `<span class="fm-thumb plain">${icon('layers')}</span>`, '모든 폴더', folders.length, ui.view === VIEW_ALL ? ' on' : ''),
     nav(`data-view="${ROOT}" data-drop="${ROOT}"`, `<span class="fm-thumb plain">${icon('inbox')}</span>`, '폴더 밖', root.length, ui.view === ROOT ? ' on' : ''),
     favRailHtml({ folders, root }, nav),
+    labelRailHtml(nav),
     `<div class="fm-rail-label"><span>폴더 ${folders.length}</span></div>`,
     ...folders.map((f) =>
       nav(`data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}"`, folderThumb(f), f.name || '이름 없음', f.data.length,
@@ -137,6 +140,7 @@ function backButton(thumb) {
 
 function headHtml(model) {
   if (ui.view === VIEW_STARS) return favHeadHtml();
+  if (isLabelView(ui.view)) return labelHeadHtml();
 
   const all = model.folders.reduce((n, f) => n + f.data.length, 0) + model.root.length;
   const scope = ui.query ? '검색 결과 전체' : ui.view === ROOT ? '폴더 밖 전체' : '이 폴더 전체';
@@ -167,13 +171,15 @@ function headHtml(model) {
 
 function renderMain(keepScroll) {
   const model = currentModel();
-  if (ui.view !== VIEW_ALL && ui.view !== ROOT && ui.view !== VIEW_STARS && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
+  const labelOk = isLabelView(ui.view) && (ui.view === VIEW_LABEL + LABEL_NEW || !!labelDef(ui.view.slice(VIEW_LABEL.length)));
+  if (ui.view !== VIEW_ALL && ui.view !== ROOT && ui.view !== VIEW_STARS && !labelOk && !model.folders.some((f) => f.id === ui.view)) ui.view = VIEW_ALL;
   ui.visible = [];
   const head = ui.app.querySelector('.fm-head');
   head.innerHTML = headHtml(model);
   head.classList.toggle('compact', ui.view === VIEW_ALL || ui.view === ROOT || !!ui.reorder);
   let html = '';
   if (ui.view === VIEW_ALL && !ui.query) {
+    html += archiveBannerHtml();
     html += favHomeHtml(model);
     const tiles = model.folders.map(folderTileHtml).join('');
     html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${model.folders.length}</span></div>
@@ -196,6 +202,8 @@ function renderMain(keepScroll) {
     const unread = roster.mode === 'single' ? roster.ids.filter((id) => !roster.resolved(id)).length : 0;
     if (unread) html += `<p class="fm-note">아직 이름을 읽지 않은 봇 ${unread}개는 검색에 나오지 않습니다. <button class="fm-link" data-act="load-all">모두 읽기</button></p>`;
     if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더나 봇이 없습니다</div>`;
+  } else if (isLabelView(ui.view)) {
+    html += labelViewHtml();
   } else {
     const inRoot = ui.view === ROOT;
     const stars = ui.view === VIEW_STARS;
@@ -263,6 +271,7 @@ function render(keepScroll = false) {
 function viewIds() {
   if (ui.view === VIEW_ALL) return null;
   if (ui.view === VIEW_STARS) return new Set(favStarIds());
+  if (isLabelView(ui.view)) return new Set(labelBotIds(ui.view.slice(VIEW_LABEL.length)));
   const m = currentModel();
   return new Set(ui.view === ROOT ? m.root : (m.folders.find((f) => f.id === ui.view)?.data || []));
 }
@@ -787,12 +796,14 @@ async function loadPrefs() {
     ui.loadAll = !!(saved && saved.loadAll);
     if (saved && FAV_SORTS.some(([k]) => k === saved.favSort)) fav.sort = saved.favSort;
     fav.fold = !!(saved && saved.favFold);
+    if (saved && ['recent', 'order'].includes(saved.labelSort)) labelUi.sort = saved.labelSort;
+    labelUi.fold = !(saved && saved.labelFold === false);
   } catch {}
   await favLoad();
 }
 
 function savePrefs() {
-  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold }); } catch {}
+  try { ui.prefs?.setItem(PREFS_KEY, { display: ui.display, view: ui.view, loadAll: !!ui.loadAll, favSort: fav.sort, favFold: fav.fold, labelSort: labelUi.sort, labelFold: labelUi.fold }); } catch {}
 }
 
 // ── 껍데기·이벤트 ──
@@ -801,7 +812,7 @@ function shellHtml() {
   return `<div class="fm-root"><div class="fm-app view-${ui.display}">
     <header class="fm-top">
       <div class="fm-brand"><span class="fm-logo">${icon('folder')}</span><div><b>Risu 폴더 마스터</b><small>v${FM_VERSION}</small></div></div>
-      <label class="fm-search">${icon('search')}<input type="search" placeholder="봇·폴더 이름 검색" aria-label="봇과 폴더 검색"></label>
+      <label class="fm-search">${icon('search')}<input type="search" placeholder="봇·폴더 이름 검색" aria-label="봇과 폴더 검색"><button class="fm-kbd fm-only-desktop" data-act="palette" title="명령 창 (Ctrl+K)" tabindex="-1">Ctrl K</button></label>
       <span class="fm-spacer"></span>
       <span class="fm-busy">저장 중</span>
       <button class="fm-loading" data-act="roster-retry" disabled>봇 정보 불러오는 중</button>
@@ -817,7 +828,14 @@ function shellHtml() {
           <button data-display="tiles" class="fm-only-mobile">${icon('tiles')}작은 타일</button>
           <button data-display="list" class="fm-only-mobile">${icon('list')}목록</button>
           <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
+          <button data-act="palette">${icon('command')}명령 창<small>Ctrl K</small></button>
           <button data-act="check">${icon('scan')}정리 점검</button>
+          <button data-act="wizard">${icon('wand')}정리 마법사</button>
+          <button data-act="dups">${icon('copy')}중복 봇 찾기</button>
+          <button data-act="archive">${icon('box')}보관함 정리</button>
+          <button data-act="icons">${icon('image')}폴더 그림 한 번에</button>
+          <button data-act="snapshots">${icon('history')}배치 기록</button>
+          <button data-act="stats">${icon('chart')}통계</button>
           <button data-act="reload">${icon('refresh')}새로 불러오기</button>
           <button data-act="fav-view">${icon('star')}즐겨찾는 봇</button>
           <button data-act="settings">${icon('gear')}설정 · 테마</button>
@@ -837,6 +855,7 @@ function shellHtml() {
           <button class="fm-btn primary fm-norm" data-act="move">${icon('folder')}폴더로 옮기기</button>
           <button class="fm-btn fm-norm" data-act="new-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>
           <button class="fm-btn fm-norm" data-act="to-root">${icon('out')}<span class="fm-text">폴더 밖으로</span></button>
+          <button class="fm-btn fm-icon fm-norm" data-act="tag-selected" title="선택한 봇에 라벨 붙이기" aria-label="선택한 봇에 라벨 붙이기">${icon('tag')}</button>
           <button class="fm-btn fm-icon fm-norm" data-act="fav-selected" title="선택한 봇 즐겨찾기 추가 / 해제" aria-label="선택한 봇 즐겨찾기 추가 / 해제">${icon('star')}</button>
           <button class="fm-btn ghost fm-icon fm-norm" data-act="clear" title="선택 해제" aria-label="선택 해제">${icon('close')}</button>
         </div>
@@ -855,7 +874,7 @@ function startLoadAllIfWanted() {
 async function openSettings() {
   const originalTheme=plus.theme;
   let loadAll = !!ui.loadAll;
-  let sidebarFav = fav.folder.on;
+  const draft = { ...plusSidebarDraft(), solo: labelStore.state.opts.solo, finish: labelStore.state.opts.finish, archOn: plusStore.state.archive.on, archDays: plusStore.state.archive.days };
   const official = roster.mode === 'full';
   const result = await openModal(
     `<h3 id="fm-dialog-title">설정</h3>
@@ -866,8 +885,9 @@ async function openSettings() {
        <button class="fm-option" data-load="all">열 때 모두 한 번에<small>검색·점검이 바로 됨</small></button>
      </div>
      <p class="fm-note" data-load-note></p>
-     <span class="fm-label">즐겨찾기</span>
-     <div class="fm-set-row"><div><b>사이드바 즐겨찾기 폴더</b><small>RisuAI 사이드바 맨 위에 즐겨찾는 봇의 바로가기 폴더를 둡니다. 봇은 복사되지 않습니다.</small></div>${favSwitchHtml(sidebarFav, 'data-sidefav', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
+     ${plusSidebarSettingsHtml(draft)}
+     ${labelSettingsHtml(draft)}
+     ${archiveSettingsHtml(draft)}
      <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>저장</button></div>`,
     (modal, close) => {
       const sync = () => {
@@ -881,16 +901,19 @@ async function openSettings() {
       };
       modal.querySelectorAll('[data-theme]').forEach(b=>{b.onclick=()=>{plusApplyTheme(b.dataset.theme);modal.querySelectorAll('[data-theme]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})}});
       modal.querySelectorAll('[data-load]').forEach((b) => { b.onclick = () => { loadAll = b.dataset.load === 'all'; sync(); }; });
-      const sw = modal.querySelector('[data-sidefav]');
-      sw.onclick = () => { sidebarFav = !sidebarFav; sw.classList.toggle('on', sidebarFav); sw.setAttribute('aria-checked', String(sidebarFav)); };
+      plusSidebarSettingsBind(modal, draft);
+      labelSettingsBind(modal, draft);
+      archiveSettingsBind(modal, draft);
       modal.querySelector('[data-x]').onclick = () => close(null);
-      modal.querySelector('[data-ok]').onclick = () => close({ loadAll, sidebarFav });
+      modal.querySelector('[data-ok]').onclick = () => close({ loadAll });
       sync();
     },
   );
   if (!result) {plusApplyTheme(originalTheme);return;}
   await plusPersist();
-  if (result.sidebarFav !== fav.folder.on) await shortcutToggle(result.sidebarFav);
+  await plusSidebarSave(draft);
+  await labelSettingsSave(draft);
+  await archiveSettingsSave(draft);
   const turnedOn = result.loadAll && !ui.loadAll;
   ui.loadAll = result.loadAll;
   savePrefs();
@@ -1002,15 +1025,16 @@ function onFolderMenuKey(e) { if (e.key === 'Escape') { e.stopPropagation(); clo
 
 function openFolderMenu(fid, x, y) {
   const fav = fid === VIEW_STARS;
-  const f = fav ? { id: VIEW_STARS, name: favFolderTitle() } : folderById(fid);
+  const lab = isLabelView(fid) ? labelDef(fid.slice(VIEW_LABEL.length)) : null;
+  const f = fav ? { id: VIEW_STARS, name: favFolderTitle() } : lab ? { id: fid, name: labelText(lab) } : folderById(fid);
   if (!f || ui.reorder || document.querySelector('.fm-modal-back')) return;
   closeFolderMenu();
   ui.menuAt = Date.now();
   const el = document.createElement('div');
   el.className = 'fm-ctx';
   el.setAttribute('role', 'menu');
-  const items = fav ? favMenuItems() : FOLDER_ITEMS;
-  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' ? ' class="danger"' : ''}>${icon(i)}${fav ? t : folderItemLabel(a, t, f.id)}</button>`).join('');
+  const items = fav ? favMenuItems() : lab ? labelMenuItems(lab.id) : FOLDER_ITEMS;
+  el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' || a === 'label-delete' ? ' class="danger"' : ''}>${icon(i)}${fav || lab ? t : folderItemLabel(a, t, f.id)}</button>`).join('');
   document.body.append(el);
   const w = el.offsetWidth;
   const h = el.offsetHeight;
@@ -1020,7 +1044,7 @@ function openFolderMenu(fid, x, y) {
     const b = e.target.closest('[data-a]');
     if (!b) return;
     closeFolderMenu();
-    if (fav) runFavMenuAction(b.dataset.a); else runFolderAction(b.dataset.a, fid);
+    if (fav) runFavMenuAction(b.dataset.a); else if (lab) runLabelMenuAction(b.dataset.a, lab.id); else runFolderAction(b.dataset.a, fid);
   });
   document.addEventListener('pointerdown', onFolderMenuOutside, true);
   document.addEventListener('keydown', onFolderMenuKey, true);
@@ -1028,6 +1052,8 @@ function openFolderMenu(fid, x, y) {
 }
 
 function folderOf(target) {
+  const lab = target.closest?.('.fm-rail .fm-nav[data-label], .fm-head-text[data-label]');
+  if (lab) return labelDef(lab.dataset.label) ? VIEW_LABEL + lab.dataset.label : null;
   const el = target.closest?.('.fm-ftile[data-folder], .fm-rail .fm-nav[data-view], [data-fav-menu]');
   if (!el) return null;
   if (el.hasAttribute('data-fav-menu') || el.dataset.view === VIEW_STARS) return VIEW_STARS;
@@ -1077,7 +1103,7 @@ const ACTIONS = {
   check: () => runCheck(),
   reload: () => reload(),
   sidebar: () => openSidebarDialog(),
-  reorder: () => { if (ui.view === VIEW_STARS) openView(VIEW_ALL); return startReorder(); },
+  reorder: () => { if (ui.view === VIEW_STARS || isLabelView(ui.view)) openView(VIEW_ALL); return startReorder(); },
   'reorder-save': () => finishReorder(),
   'reorder-cancel': () => cancelReorder(),
   'select-all': () => selectAllVisible(),
@@ -1099,6 +1125,17 @@ const ACTIONS = {
   'fav-folder-toggle': () => favFolderToggle(),
   'fav-folder-rename': () => shortcutRename(),
   'fav-folder-image': () => shortcutImage(),
+  palette: () => openPalette(),
+  wizard: () => openWizard(),
+  dups: () => openDuplicates(),
+  archive: () => openArchive(),
+  'archive-snooze': () => archiveSnooze(),
+  snapshots: () => openSnapshots(),
+  icons: () => openBatchIcons(),
+  stats: () => openStats(),
+  'label-new': () => editLabelDialog(null),
+  'label-edit': () => { const d = labelDef(ui.view.slice(VIEW_LABEL.length)); if (d) editLabelDialog(d); },
+  'tag-selected': () => openLabelPicker([...ui.selected]),
 };
 
 function bindEvents(root) {
@@ -1130,6 +1167,11 @@ function bindEvents(root) {
     if (retry) { rosterRetry([retry.dataset.retry]); return; }
     const star = t.closest('[data-star]');
     if (star) { if (!ui.reorder) favToggleStar(star.dataset.star); return; }
+    const tag = t.closest('[data-tag]');
+    if (tag) { if (!ui.reorder) openLabelPicker([tag.dataset.tag]); return; }
+    const lsort = t.closest('[data-label-sort]');
+    if (lsort) { labelUi.sort = lsort.dataset.labelSort; savePrefs(); renderMain(true); return; }
+    if (t.closest('[data-label-fold]')) { labelUi.fold = !labelUi.fold; savePrefs(); renderRail(); ui.app.querySelector('.fm-rail [data-label-fold]:not([hidden])')?.focus({ preventScroll: true }); return; }
     const sort = t.closest('[data-fav-sort]');
     if (sort) { fav.sort = sort.dataset.favSort; savePrefs(); renderMain(true); return; }
     if (t.closest('[data-fav-fold]')) { fav.fold = !fav.fold; savePrefs(); renderMain(true); return; }
@@ -1180,6 +1222,7 @@ function bindEvents(root) {
     ui.escBound = true;
     // 포커스가 문서 본문에 있어도 받도록 문서 전체에서 듣는다. 대화상자가 열려 있으면 그쪽이 먼저 처리한다.
     document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k' && ui.app && !drag.active && !document.querySelector('.fm-modal-back')) { e.preventDefault(); openPalette(); return; }
       if (e.key !== 'Escape' || !ui.app || document.querySelector('.fm-modal-back') || drag.active) return;
       const menu = ui.app.querySelector('.fm-menu');
       if (menu.classList.contains('open')) menu.classList.remove('open');
@@ -1198,18 +1241,24 @@ async function openManager() {
   ui.session = (ui.session || 0) + 1;
   try {
     await loadPrefs();
+    await shortcutReloadStores();
     ui.order = await readOrder();
     // 사이드바 즐겨찾기 폴더: 사이드바에서 고친 것·다른 기기 변경을 맞추고(꺼져 있는데 남아 있으면 지운다) 감시를 시작한다.
     try { if (await saver.syncShortcut() === 'written') ui.order = await readOrder(); } catch (err) { console.log('[risu-folder-master] 즐겨찾기 폴더 맞추기 실패: ' + errorText(err)); }
     shortcutPollStart();
-    if (fav.folder.on) shortcutGuard();
+    if (shortcutAnyOn()) shortcutGuard();
+    recentWatchStart();
+    await labelSeenLoad();
+    await snapLoad();
+    snapCheckExternal(ui.order);
+    saver.onCommitted = (label, next) => { try { snapPush('auto', label, next); } catch {} };
     roster.onUpdate = onRosterUpdate;
     ui.grid = await loadGrid();
     ui.selected.clear();
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
-    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}</style>${shellHtml()}`;
+    document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}${PLUS_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);
     bindEvents(document.querySelector('.fm-root'));
