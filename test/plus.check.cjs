@@ -53,7 +53,7 @@ const extra = () => [
     ok(await p.locator('.fm-rail .fm-nav[data-label]').count() === 5, 'unfold shows labels');
     // ── ⑧ 라벨: 봇 칸 🏷️ → 진행 중
     await p.hover('.fm-card[data-id="c10"]');
-    await p.click('.fm-card[data-id="c10"] [data-tag]');
+    await p.click('.fm-card[data-id="c10"] [data-more]'); await p.click('.fm-ctx [data-a="label"]');
     await p.waitForSelector('.fm-lrows');
     await shot(p, 'label-picker');
     await p.click('.fm-lrows [data-lab="l-play"]');
@@ -81,7 +81,7 @@ const extra = () => [
     await p.click('.fm-rail .fm-rail-fold'); await p.waitForTimeout(200);
     // 「진행 중」은 하나만
     await menu(p, 'settings');
-    await p.click('.fm-modal [data-lsolo="l-play"]');
+    await p.click('[data-tab="label"]'); await p.click('.fm-modal [data-lsolo="l-play"]');
     await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(500);
     await home(p);
     await p.click('.fm-card[data-id="c11"]'); await p.click('[data-act="tag-selected"]'); await p.click('.fm-lrows [data-lab="l-play"]'); await p.click('.fm-modal [data-x]'); await p.waitForTimeout(500);
@@ -107,7 +107,7 @@ const extra = () => [
     await p.click('.fm-rail [data-act="label-new"]'); await p.waitForSelector('.fm-lab-name');
     await p.keyboard.press('Escape'); await p.waitForTimeout(200);
     ok(await p.locator('.fm-modal').count() === 0, 'single modal closes with Esc');
-    await p.hover('.fm-card[data-id="c12"]'); await p.click('.fm-card[data-id="c12"] [data-tag]'); await p.click('.fm-modal [data-new-label]'); await p.waitForSelector('.fm-lab-name');
+    await p.hover('.fm-card[data-id="c12"]'); await p.click('.fm-card[data-id="c12"] [data-more]'); await p.click('.fm-ctx [data-a="label"]'); await p.click('.fm-modal [data-new-label]'); await p.waitForSelector('.fm-lab-name');
     await p.keyboard.press('Escape'); await p.waitForTimeout(250);
     ok(await p.locator('.fm-modal').count() === 1 && await p.isVisible('.fm-lrows'), 'Esc in nested dialog closes only the top one');
     // 키보드로 체크해도 포커스가 남는다
@@ -206,7 +206,7 @@ const extra = () => [
 
     // ── ① 최근 대화 폴더
     await menu(p, 'settings');
-    await p.click('.fm-modal [data-sw="recent"]');
+    await p.click('[data-tab="side"]'); await p.click('.fm-modal [data-sw="recent"]');
     await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(1200);
     o = await order(p);
     ok(o[0].id === 'risu-folder-master-recent' && o[0].data[0] === 'c12', 'recent folder on top with current bot first', o[0]);
@@ -227,7 +227,7 @@ const extra = () => [
     await p.keyboard.press('Escape');
     // 끄면 정리
     await menu(p, 'settings');
-    await p.click('.fm-modal [data-sw="recent"]'); await p.click('.fm-modal [data-lfolder=""]');
+    await p.click('[data-tab="side"]'); await p.click('.fm-modal [data-sw="recent"]'); await p.click('[data-tab="side"]'); await p.click('.fm-modal [data-lfolder=""]');
     await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(1000);
     o = await order(p);
     ok(!o.some((x) => typeof x === 'object' && x.id.startsWith('risu-folder-master-')), 'turning off removes shortcut folders');

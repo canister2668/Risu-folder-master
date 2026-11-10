@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.0.9
+//@display-name 📁 Risu 폴더 마스터 v1.1.0
 //@api 3.0
-//@version 1.0.9
+//@version 1.1.0
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.0.9 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.1.0 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.0.9";
+const FM_VERSION = "1.1.0";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -1769,6 +1769,7 @@ const ICON_PATHS = {
   box: '<path d="M3.5 8 12 4l8.5 4-8.5 4z"/><path d="M3.5 8v8.5L12 20.5l8.5-4V8"/><path d="M12 12v8.5"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
   command: '<path d="M9 9h6v6H9z"/><path d="M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9zM15 9V6.5A2.5 2.5 0 1 1 17.5 9H15zM9 15v2.5A2.5 2.5 0 1 1 6.5 15H9zM15 15v2.5a2.5 2.5 0 1 0 2.5-2.5H15z"/>',
+  sort: '<path d="M4 7h16M4 12h11M4 17h6"/>',
   sparkle: '<path d="M12 3.5 13.8 10l6.7 2-6.7 2L12 20.5 10.2 14l-6.7-2 6.7-2z"/>',
 };
 
@@ -3318,13 +3319,13 @@ function plusSidebarSettingsHtml(d) {
   const labels = labelStore.state.defs;
   return `<span class="fm-label">사이드바 바로가기 폴더</span>
      <p class="fm-note">RisuAI 사이드바 맨 위에 봇의 바로가기 폴더를 둡니다. 봇은 복사되지 않고 원래 폴더에도 그대로 있습니다. 이 폴더들은 폴더 마스터에서만 고칩니다.</p>
-     <div class="fm-set-row"><div><b>⭐ 즐겨찾기 폴더</b><small>즐겨찾는 봇을 사이드바 맨 위에</small></div>${favSwitchHtml(d.fav, 'data-sw="fav"', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
-     <div class="fm-set-row">${shortcutIconButton('recent')}<div><b>🕘 최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다). 왼쪽 그림을 누르면 아이콘을 바꿉니다.</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
+     <div class="fm-set-row"><div><b>즐겨찾기 폴더</b><small>즐겨찾는 봇을 사이드바 맨 위에</small></div>${favSwitchHtml(d.fav, 'data-sw="fav"', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
+     <div class="fm-set-row">${shortcutIconButton('recent')}<div><b>최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다). 왼쪽 그림을 누르면 아이콘을 바꿉니다.</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>보여 줄 개수</b></div>${seg('data-rcount', [[5, '5'], [8, '8'], [12, '12']], d.count)}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>즐겨찾기 봇은 빼기</b><small>두 폴더에 같은 봇이 겹치지 않게</small></div>${favSwitchHtml(d.noStars, 'data-sw="noStars"', '최근 대화에서 즐겨찾기 봇 빼기')}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 먼저'], ['favorites', '즐겨찾기 먼저']], d.first)}</div>
-     <div class="fm-set-row">${shortcutIconButton('cleanup')}<div><b>🧹 정리 폴더 아이콘</b><small>중복 봇 찾기에서 꺼낼 때 사이드바 맨 위에 잠깐 생기는 폴더의 그림입니다.</small></div></div>
-     <div class="fm-set-row"><div><b>🏷️ 라벨 폴더</b><small>라벨 하나를 사이드바 맨 위 폴더로 (예: 「진행 중」)</small></div></div>
+     <div class="fm-set-row">${shortcutIconButton('cleanup')}<div><b>정리 폴더 아이콘</b><small>중복 봇 찾기에서 꺼낼 때 사이드바 맨 위에 잠깐 생기는 폴더의 그림입니다.</small></div></div>
+     <div class="fm-set-row"><div><b>라벨 폴더</b><small>라벨 하나를 사이드바 맨 위 폴더로 (예: 「진행 중」)</small></div></div>
      <div class="fm-chips" role="group" aria-label="라벨 폴더">${[['', '쓰지 않음'], ...labels.map((l) => [l.id, `${l.emoji ? l.emoji + ' ' : ''}${l.name}`])].map(([v, t]) => `<button data-lfolder="${esc(v)}" class="${d.lfolder === v ? 'on' : ''}" aria-pressed="${d.lfolder === v}">${esc(t)}</button>`).join('')}</div>`;
 }
 
@@ -3443,6 +3444,16 @@ function labelChipsHtml(id) {
     .map((d) => `<span class="fm-lbl" style="--c:${labelHex(d)}" title="라벨">${esc(labelText(d))}</span>`);
   if (labelIsNew(id)) out.push('<span class="fm-lbl new" title="자동 라벨: 받은 지 7일 안 · 아직 대화 없음">🆕 새로 받음</span>');
   return out.join('');
+}
+
+// 좁은 봇 칸용: 라벨마다 색 점 하나 + 이름을 가운뎃점으로 이은 글자.
+function labelDotsHtml(id) {
+  const defs = labelsOf(labelStore.state, id).map(labelDef).filter(Boolean);
+  const fresh = labelIsNew(id);
+  if (!defs.length && !fresh) return '';
+  const dots = defs.map((d) => `<i class="fm-ldot" style="--c:${labelHex(d)}"></i>`).join('') + (fresh ? '<i class="fm-ldot new"></i>' : '');
+  const names = [...defs.map((d) => d.name), ...(fresh ? ['새로 받음'] : [])];
+  return `${dots}<span title="라벨: ${esc(names.join(', '))}">${esc(names.join(' · '))}</span>`;
 }
 
 function labelButtonHtml(id) {
@@ -3855,27 +3866,29 @@ async function openDuplicates() {
     if (!live().length) return '<div class="fm-empty">이름이 같거나 비슷한 봇이 없습니다</div>';
     return live().map((g) => {
       const first = roster.chars.get(g.ids[0]);
-      return `<section class="fm-dupe"><div class="fm-dupe-h">${avatarHtml(first, g.ids[0])}<b>${esc(first.name)}</b><span class="fm-badge warn">${g.ids.length}개</span><small>${g.same ? '이름 같음' : '이름 비슷함'}</small>
-        <button class="fm-link" data-dup-ignore="${esc(g.key)}">이 묶음 무시</button></div>
+      return `<section class="fm-dupe"><div class="fm-dupe-h">${avatarHtml(first, g.ids[0])}<div class="fm-dupe-t"><b>${esc(first.name)}</b><small>${g.same ? '이름 같음' : '이름 비슷함'} · ${g.ids.length}개</small></div>
+        <button class="fm-dupe-skip" data-dup-ignore="${esc(g.key)}" title="이 묶음은 다음부터 중복으로 보지 않습니다">무시</button></div>
         <div class="fm-dupe-rows">${g.ids.map((id) => {
           const c = roster.chars.get(id);
           const t = timeAgo(c.last);
           const on = pick.has(id);
           return `<div class="fm-dupe-row${on ? ' picked' : ''}">${favSwitchHtml(on, `data-dup-pick="${esc(id)}"`, `${c.name} 정리 대상`)}
-            <span class="fm-dupe-name">${esc(c.name)}</span><span class="fm-dupe-where">${icon('folder')}${esc(favFolderName(id))}</span><span class="fm-dupe-last">${t ? esc(t.short) : '대화 없음'}</span>
-            <button class="fm-btn fm-sm" data-dup-loc="${esc(id)}">${icon('locate')}찾기</button></div>`;
+            <div class="fm-dupe-t"><span class="fm-dupe-name">${esc(c.name)}</span><small>${esc(favFolderName(id))} · ${t ? esc(t.short) : '대화 없음'}</small></div>
+            <button class="fm-btn fm-sm" data-dup-loc="${esc(id)}" title="사이드바에서 찾기" aria-label="${esc(c.name)} 사이드바에서 찾기">${icon('locate')}<span>찾기</span></button></div>`;
         }).join('')}</div></section>`;
     }).join('');
   };
   const picked = () => live().flatMap((g) => g.ids.filter((id) => pick.has(id)));
   const act = await openModal(
     `<h3 id="fm-dialog-title">${icon('copy')} 중복 봇 찾기</h3>
-     <p class="fm-desc">이름이 같거나 버전 표기·「사본」만 다른 봇을 묶었습니다. 정리할 봇을 켜고 「정리 폴더로 꺼내기」를 누르면 사이드바 맨 위 「${CLEANUP_NAME}」 폴더에 모입니다. 거기서 봇을 눌러 RisuAI에서 지우세요. 폴더는 닫으면 사라지고, 봇은 원래 자리 그대로입니다.</p>
+     <p class="fm-desc">이름이 같거나 버전 표기·「사본」만 다른 봇을 묶었습니다.</p>
+     <ol class="fm-steps"><li class="on"><b>1 고르기</b>지울 쪽을 켭니다</li><li><b>2 꺼내기</b>사이드바 맨 위 「${CLEANUP_NAME}」 폴더로</li><li><b>3 지우기</b>거기서 봇을 눌러 RisuAI에서 삭제</li></ol>
+     <p class="fm-steps-note">정리 폴더는 닫으면 사라지고, 지우지 않은 봇은 원래 자리 그대로입니다.</p>
      ${unreadNote(ids, '중복 찾기')}
      <div class="fm-dupes" data-rows>${body()}</div>
-     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn" data-dup-archive>📦 보관함으로</button><button class="fm-btn primary" data-dup-clean>🧹 정리 폴더로 꺼내기</button></div>`,
+     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn" data-dup-archive>보관함으로</button><button class="fm-btn primary" data-dup-clean>정리 폴더로 꺼내기</button></div>`,
     (modal, close) => {
-      modal.classList.add('fm-big');
+      modal.classList.add('fm-big', 'fm-dup-modal');
       const rows = modal.querySelector('[data-rows]');
       const sync = () => {
         rerender(rows, body());
@@ -3884,7 +3897,7 @@ async function openDuplicates() {
         modal.querySelector('[data-dup-archive]').disabled = !n;
         const clean = modal.querySelector('[data-dup-clean]');
         clean.disabled = !n;
-        clean.textContent = n ? `🧹 정리 폴더로 꺼내기 (${n})` : '🧹 정리 폴더로 꺼내기';
+        clean.textContent = n ? `정리 폴더로 꺼내기 (${n})` : '정리 폴더로 꺼내기';
         lazyAvatars(rows);
       };
       rows.addEventListener('click', (e) => {
@@ -4014,8 +4027,8 @@ function archiveBannerHtml() {
   if (!a.on || ui.reorder || Date.now() < a.snooze) return '';
   const n = archiveList(a.days).filter((x) => !favIsStar(x.id)).length;
   if (n < ARCHIVE_MIN) return '';
-  return `<div class="fm-arch-banner"><span class="fm-arch-ic">${icon('box')}</span><div><b>${a.days}일 넘게 대화하지 않았거나 다 본 봇이 ${n}개 있어요</b><small>보관함 폴더로 옮기면 사이드바가 짧아집니다. 채팅은 그대로 남습니다.</small></div>
-    <button class="fm-btn" data-act="archive-snooze">나중에</button><button class="fm-btn primary" data-act="archive">골라서 옮기기</button></div>`;
+  return `<div class="fm-arch-banner"><span class="fm-arch-ic">${icon('box')}</span><div><b>${a.days}일 넘게 쉬었거나 다 본 봇 ${n}개</b><small>보관함 폴더로 옮기면 사이드바가 짧아집니다. 채팅은 그대로 남습니다.</small></div>
+    <button class="fm-link" data-act="archive">골라서 옮기기</button><button class="fm-arch-later" data-act="archive-snooze">나중에</button></div>`;
 }
 
 async function openArchive(opts = {}) {
@@ -4209,15 +4222,16 @@ const PALETTE_CMDS = [
   ['create-folder', 'plus', '새 폴더'],
   ['wizard', 'wand', '정리 마법사'],
   ['dups', 'copy', '중복 봇 찾기'],
-  ['archive', 'box', '보관함 정리'],
+  ['archive', 'box', '보관함으로 옮기기'],
   ['snapshots', 'history', '배치 기록'],
   ['icons', 'image', '폴더 그림 한 번에'],
   ['stats', 'chart', '통계'],
-  ['check', 'scan', '정리 점검'],
+  ['check', 'scan', '빈 자리·겹침 검사'],
   ['fav-view', 'star', '즐겨찾는 봇'],
   ['reorder', 'move', '순서 편집'],
   ['sidebar', 'sidebar', '사이드바 배열'],
-  ['settings', 'gear', '설정 · 테마'],
+  ['settings', 'gear', '설정'],
+  ['sort-folders', 'sort', '폴더 정렬'],
   ['reload', 'refresh', '새로 불러오기'],
 ];
 
@@ -4388,17 +4402,24 @@ const PLUS_CSS = `
 .fm-snap-acts{display:flex;gap:6px;flex:none}
 .fm-dupes,.fm-wzs{display:grid;gap:10px}
 .fm-dupe{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.fm-dupe-h{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface)}
+.fm-dupe-h{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 12px;background:var(--surface)}
+.fm-dupe-t{min-width:0}
+.fm-dupe-t b,.fm-dupe-t .fm-dupe-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fm-dupe-h b{font-size:13.5px}
-.fm-dupe-h small{color:var(--faint);font-size:11.5px}
-.fm-dupe-h .fm-link{margin-left:auto}
-.fm-dupe-row{display:grid;grid-template-columns:auto minmax(0,1.4fr) minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.fm-dupe-h small{display:block;color:#f0b860;font-size:11.5px;font-weight:600}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-dupe-h small{color:#8a4b08}
+.fm-dupe-row small{display:block;color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-dupe-skip{padding:5px 9px;border-radius:8px;color:var(--muted);font-size:12px;white-space:nowrap}
+.fm-dupe-skip:hover{background:var(--surface-2);color:var(--text)}
+.fm-dupe-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.fm-steps{display:flex;gap:6px;list-style:none;margin:0 0 6px}
+.fm-steps li{flex:1;min-width:0;padding:7px 9px;border-radius:9px;background:var(--surface);font-size:11.5px;color:var(--muted);line-height:1.35}
+.fm-steps li b{display:block;color:var(--text);font-size:12px}
+.fm-steps li.on{background:var(--accent-bg);box-shadow:inset 0 0 0 1px var(--accent)}
+.fm-steps-note{font-size:11.5px;color:var(--faint);margin:0 0 12px}
+.fm-count-note{white-space:nowrap}
 .fm-dupe-row .fm-switch{transform:scale(.85)}
 .fm-dupe-row.picked .fm-dupe-name{color:var(--text);font-weight:650}
-.fm-dupe-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fm-dupe-where{display:inline-flex;align-items:center;gap:4px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.fm-dupe-where .fm-i{width:13px;height:13px;flex:none}
-.fm-dupe-last{color:var(--faint);font-size:11.5px;white-space:nowrap}
 .fm-btn.fm-sm{height:28px;padding:0 9px;font-size:11.5px}
 .fm-btn.fm-sm .fm-i{width:13px;height:13px}
 .fm-wz-modes{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;color:var(--muted)}
@@ -4416,11 +4437,14 @@ const PLUS_CSS = `
 .fm-minibot{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .fm-minibot.more{padding:3px 9px;color:var(--muted)}
 .fm-av.sm{width:20px;height:20px;border-radius:50%;font-size:9px;flex:none}
-.fm-arch-banner{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 14px;border-radius:12px;border:1px solid #5a4020;background:#1f1b14}
-.fm-arch-banner div{flex:1;min-width:0}
-.fm-arch-banner b{display:block;font-size:13px}
-.fm-arch-banner small{display:block;font-size:11.5px;color:var(--muted)}
-.fm-arch-ic{color:#e0a63a;display:grid}.fm-arch-ic .fm-i{width:24px;height:24px}
+.fm-arch-banner{display:flex;align-items:center;gap:10px;padding:8px 12px;margin:0 0 14px;border-radius:10px;border:1px solid #5a4020;background:#1f1b14}
+.fm-arch-banner div{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.fm-arch-banner b{font-size:12.5px}
+.fm-arch-banner small{font-size:11.5px;color:var(--muted)}
+.fm-arch-banner .fm-link{text-decoration:none;white-space:nowrap}
+.fm-arch-later{color:var(--muted);font-size:12px;white-space:nowrap;padding:4px 6px;border-radius:7px}
+.fm-arch-later:hover{background:rgba(255,255,255,.07);color:var(--text)}
+.fm-arch-ic{color:#e0a63a;display:grid}.fm-arch-ic .fm-i{width:18px;height:18px}
 :root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-arch-banner{background:#fff6e6;border-color:#e2c48c}
 .fm-arch-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px;max-height:min(52vh,460px);overflow:auto;padding:2px}
 .fm-arch-row{display:flex;align-items:center;gap:9px;height:48px;padding:0 10px;border-radius:11px;background:var(--surface);border:1px solid var(--line);text-align:left}
@@ -4475,17 +4499,6 @@ const PLUS_CSS = `
 .fm-pal-op small{color:var(--faint);font-size:11.5px;white-space:nowrap}
 .fm-pal-op em{margin-left:auto;font-style:normal;font-size:11px;color:var(--faint);white-space:nowrap}
 .fm-pal-ft{display:flex;flex-wrap:wrap;gap:14px;padding:8px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
-/* 마우스: 봇 칸 버튼은 이름 위에 겹쳐 띄우고(자리 차지 안 함), 켜진 별·라벨만 늘 보인다 */
-@media (hover:hover){
-  .fm-card,.view-list .fm-card{grid-template-columns:34px minmax(0,1fr)}
-  .view-list .fm-card{grid-template-columns:30px minmax(0,1fr)}
-  .fm-acts{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding-left:16px;background:linear-gradient(90deg,transparent,var(--surface) 16px);border-radius:0 9px 9px 0}
-  .fm-card.sel .fm-acts{background:linear-gradient(90deg,transparent,var(--accent-bg) 16px)}
-  .fm-acts>*{display:none}
-  .fm-acts>.on,.fm-card:hover .fm-acts>*,.fm-card:focus-within .fm-acts>*{display:grid}
-  .fm-card:not(:hover):not(:focus-within) .fm-acts:not(:has(>.on)){display:none}
-  .fm-app.is-reorder .fm-acts{display:none}
-}
 .fm-kbd{font-size:10.5px;padding:0 5px;border-radius:5px;border:1px solid var(--line-2);color:var(--faint);margin-left:4px}
 .fm-search .fm-kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);margin:0;line-height:18px;background:var(--surface)}
 .fm-search .fm-kbd:hover{color:var(--text);border-color:var(--accent)}
@@ -4494,20 +4507,107 @@ const PLUS_CSS = `
 @media (max-width:640px){
   .fm-stats{grid-template-columns:repeat(2,1fr)}
   .fm-stat-row{grid-template-columns:96px 1fr 54px}
-  .fm-dupe-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:2px}
-  .fm-dupe-where,.fm-dupe-last{grid-column:2}
+  .fm-dupe-row .fm-sm{width:34px;height:34px;padding:0;justify-content:center}
+  .fm-dupe-row .fm-sm span{display:none}
+  .fm-dup-modal .fm-modal-actions{flex-wrap:wrap}
+  .fm-dup-modal .fm-count-note{flex:1 1 100%}
+  .fm-dup-modal .fm-modal-actions .fm-spacer{display:none}
+  .fm-dup-modal .fm-modal-actions .primary{flex:1;justify-content:center}
   .fm-snap{flex-wrap:wrap}.fm-snap-acts{width:100%;justify-content:flex-end}
-  .fm-arch-banner{flex-wrap:wrap;align-items:flex-start}
-  .fm-arch-banner>div{flex:1 1 calc(100% - 48px)}
+  .fm-arch-banner{flex-wrap:wrap}
+  .fm-arch-banner>div{flex:1 1 calc(100% - 40px)}
   .fm-arch-banner .fm-btn{flex:1 1 0;justify-content:center}
+  .fm-arch-banner .fm-link{margin-left:28px}
   .fm-pal-ft{display:none}
+}
+
+/* ── 화면 개편: 봇 칸·폴더 타일·도구 메뉴·설정 갈래 ── */
+.fm-thumb.fm-ini{font-size:14px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.fm-head .fm-thumb.fm-ini{font-size:19px}
+.fm-ftile .fm-thumb{width:62px;height:62px;border-radius:16px}
+.fm-ftile .fm-thumb.fm-ini{font-size:25px}
+.fm-fcount{left:calc(50% + 19px)}
+.fm-thumb.fm-mosaic{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;place-items:stretch;gap:3px;padding:6px;background:var(--surface-2)}
+.fm-mosaic i{position:relative;display:block;border-radius:6px;overflow:hidden;background:var(--line)}
+.fm-mosaic i img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fm-folders{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.fm-grid{grid-template-columns:repeat(auto-fill,minmax(232px,1fr))}
+.fm-card,.view-list .fm-card{grid-template-columns:36px minmax(0,1fr) auto;gap:10px;padding:6px 4px 6px 6px}
+.view-list .fm-card{grid-template-columns:30px minmax(0,1fr) auto;padding:3px 4px 3px 4px}
+.fm-av{width:36px;height:36px;border-radius:9px}
+.fm-name{font-size:13px}
+.fm-meta{font-size:11px;gap:7px}
+.fm-acts{display:flex;align-items:center;gap:0}
+.fm-more{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--faint);transition:background-color .12s,color .12s}
+.fm-more .fm-i{width:16px;height:16px}
+.fm-card:hover .fm-more,.fm-more:focus-visible{color:var(--text)}
+.fm-more:hover{background:var(--bg);color:var(--text)}
+.fm-app.is-reorder .fm-more,.fm-app.is-locating .fm-more{pointer-events:none;opacity:.3}
+.fm-star{opacity:1}
+.fm-meta .fm-lbls-dots{display:inline-flex;align-items:center;gap:3px;min-width:0;flex:0 1 auto;max-width:70%}
+.fm-meta .fm-lbls-dots span{display:block;overflow:hidden;text-overflow:ellipsis;margin-left:2px}
+.fm-ldot{width:7px;height:7px;border-radius:50%;background:var(--c,#8d95a8);flex:none}
+.fm-ldot.new{background:#8d95a8}
+.view-tiles .fm-lbls-full,.view-list .fm-lbls-dots{display:none}
+.fm-section-head .fm-more-link{color:var(--accent-2);font-weight:650}
+.fm-cmds{display:flex;flex-wrap:wrap;gap:6px}
+.fm-menu{min-width:236px;max-height:min(78vh,620px);overflow:auto}
+.fm-menu h6{font-size:10.5px;font-weight:650;letter-spacing:.06em;color:var(--faint);padding:9px 10px 3px}
+.fm-menu hr{border:0;border-top:1px solid var(--line);margin:5px 4px}
+.fm-menu small:empty{display:none}
+.fm-head-text p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 대화상자가 떠 있으면 알림을 위로 올려 아래쪽 버튼을 가리지 않는다 */
+body:has(.fm-modal-back) .fm-toast{bottom:auto;top:14px}
+/* 설정 창 */
+.fm-modal.fm-set-modal{width:min(780px,100%);padding:0;display:flex;flex-direction:column;overflow:hidden}
+.fm-set-modal>h3{padding:16px 18px 10px;margin:0}
+.fm-set{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:0;flex:1;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fm-set-tabs{display:flex;flex-direction:column;gap:2px;padding:10px 8px;background:var(--bg);border-right:1px solid var(--line)}
+.fm-set-tabs button{display:flex;align-items:center;gap:10px;min-height:40px;padding:6px 10px;border-radius:10px;text-align:left;color:var(--muted);font-weight:550}
+.fm-set-tabs button:hover{background:var(--surface)}
+.fm-set-tabs button.on{background:var(--surface-2);color:var(--text);box-shadow:inset 3px 0 var(--accent)}
+.fm-set-body{height:min(60vh,470px);overflow:auto;padding:4px 20px 18px;overscroll-behavior:contain}
+.fm-set-body .fm-label:first-child{margin-top:14px;font-size:14px;color:var(--text)}
+.fm-set-modal .fm-modal-actions{margin:0;padding:12px 18px}
+.fm-set-row{flex-wrap:nowrap;padding:8px 0;margin:0;border-top:1px solid var(--line)}
+.fm-set-row div{flex:1 1 0}
+.fm-set-row.fm-sub-row{border-top:0;padding:3px 0 3px 54px}
+.fm-set-row+.fm-chips{margin-top:0}
+.fm-set-body .fm-note{margin:0 0 12px}
+@media (max-width:760px){
+  .fm-more{width:38px;height:38px}
+  .fm-toast{bottom:150px}
+}
+@media (max-width:640px){
+  .fm-set{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .fm-set-tabs{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 10px;scrollbar-width:none}
+  .fm-set-tabs::-webkit-scrollbar{display:none}
+  .fm-set-tabs button{flex:none;white-space:nowrap;min-height:36px}
+  .fm-set-tabs button.on{box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-bg)}
+  .fm-set-tabs button .fm-i{display:none}
+  .fm-set-body{height:auto;max-height:none;flex:1;padding:4px 14px 16px}
+  .fm-modal.fm-set-modal{height:100%}
+  .fm-set-row.fm-sub-row{padding-left:14px}
+  .fm-steps{flex-direction:row}
+  .fm-steps li{padding:6px 7px;font-size:11px}
+}
+@media (max-width:560px){
+  .fm-grid,.view-list .fm-grid{grid-template-columns:minmax(0,1fr);gap:4px}
+  .view-tiles .fm-card{grid-template-columns:40px minmax(0,1fr) auto;padding:7px 2px 7px 7px}
+  .view-tiles .fm-av{width:40px;height:40px}
+  .view-tiles .fm-name{font-size:14px}
+  .view-tiles .fm-meta{font-size:11.5px}
+  .fm-ftile .fm-thumb{width:56px;height:56px}
+  .fm-card.fm-drop-before{box-shadow:0 -3px 0 -1px var(--accent)}
+  .fm-card.fm-drop-after{box-shadow:0 3px 0 -1px var(--accent)}
+  .fm-fcount{left:calc(50% + 16px)}
 }
 `;
 
 // 설정 창의 보관함 칸.
 function archiveSettingsHtml(d) {
   return `<span class="fm-label">보관함 제안</span>
-     <div class="fm-set-row"><div><b>📦 오래된 봇 보관함 제안</b><small>첫 화면 위에 한 줄 띠로 알려 주기만 합니다. 자동으로 옮기지 않습니다.</small></div>${favSwitchHtml(d.archOn, 'data-arch-on', '보관함 제안 켜기/끄기')}</div>
+     <div class="fm-set-row"><div><b>오래된 봇 보관함 제안</b><small>첫 화면 위에 한 줄 띠로 알려 주기만 합니다. 자동으로 옮기지 않습니다.</small></div>${favSwitchHtml(d.archOn, 'data-arch-on', '보관함 제안 켜기/끄기')}</div>
      <div class="fm-set-row fm-sub-row" data-arch-only><div><b>기준</b><small>이 기간 넘게 대화하지 않은 봇</small></div><div class="fm-fav-sort" role="group">${[30, 60, 90].map((n) => `<button data-arch-days="${n}">${n}일</button>`).join('')}</div></div>`;
 }
 
@@ -4536,6 +4636,7 @@ const ROOT = '__root__';
 const VIEW_ALL = '__all__';
 const VIEW_STARS = '__favorites__';
 const PREFS_KEY = 'risuFolderMaster.ui';
+const HOME_ROOT_MAX = 8; // 첫 화면에 보이는 폴더 밖 봇 수
 
 const ui = {
   chars: roster.chars,
@@ -4587,11 +4688,47 @@ function matches(id) {
 
 // ── 조각 ──
 
+// 그림 없는 폴더를 서로 구분하기 위한 표시: 이름 맨 앞 이모지, 없으면 첫 글자.
+function folderInitial(name) {
+  const s = String(name || '').trim();
+  const emo = s.match(/^\p{Extended_Pictographic}\uFE0F?/u)?.[0];
+  return emo || s.match(/[\p{L}\p{N}]/u)?.[0] || '';
+}
+
+// 색을 고르지 않은 폴더는 이름에서 뽑은 차분한 색을 쓴다(이 화면 안에서만, RisuAI 사이드바 색은 그대로).
+function folderTint(folder) {
+  if (folder.color && folder.color !== 'default' && FOLDER_HEX[folder.color]) return FOLDER_HEX[folder.color];
+  const s = String(folder.name || '');
+  if (!s) return FOLDER_HEX.default;
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return `hsl(${h} 30% 38%)`;
+}
+
+// 큰 타일용: 그림 없는 폴더는 안에 든 봇 그림 넉 장(이미 아는 봇만, 새로 읽지 않는다).
+function folderMosaic(folder) {
+  const imgs = [];
+  for (const id of folder.data || []) {
+    const im = roster.chars.get(id)?.image;
+    if (im) imgs.push(im);
+    if (imgs.length === 4) break;
+  }
+  if (imgs.length < 2) return '';
+  const cell = (im) => { const src = avatars.peek(im); return src ? `<i><img src="${esc(src)}" alt=""></i>` : `<i data-src="${esc(im)}"></i>`; };
+  return `<span class="fm-thumb fm-mosaic">${imgs.map(cell).join('')}${'<i></i>'.repeat(4 - imgs.length)}</span>`;
+}
+
 function folderThumb(folder, cls = '') {
-  const color = FOLDER_HEX[folder.color] || FOLDER_HEX.default;
   const src = folder.imgFile ? avatars.peek(folder.imgFile) : null;
+  if (!folder.imgFile) {
+    // 색을 고른 폴더는 그 색이 표시이므로 봇 그림 모음은 색 없는 폴더에만 쓴다.
+    if (cls.includes('big') && (!folder.color || folder.color === 'default')) { const m = folderMosaic(folder); if (m) return m; }
+    const ini = folderInitial(folder.name);
+    return `<span class="fm-thumb ${cls}${ini ? ' fm-ini' : ''}" style="--c:${folderTint(folder)}">${ini ? esc(ini) : icon('folder')}</span>`;
+  }
+  const color = FOLDER_HEX[folder.color] || FOLDER_HEX.default;
   const inner = src ? `<img src="${esc(src)}" alt="">` : icon('folder');
-  const lazy = folder.imgFile && !src ? ` data-src="${esc(folder.imgFile)}"` : '';
+  const lazy = !src ? ` data-src="${esc(folder.imgFile)}"` : '';
   return `<span class="fm-thumb ${cls}" style="--c:${color}"${lazy}>${inner}</span>`;
 }
 
@@ -4614,7 +4751,7 @@ function cardHtml(id, container) {
     if (c.assets) meta.push(`<span class="fm-extra" title="에셋 ${c.assets}개">${icon('image')}${c.assets}</span>`);
     if (container === VIEW_STARS || isLabelView(container)) meta.unshift(`<span class="fm-fav-where" title="원래 위치">${icon('folder')}${esc(favFolderName(id))}</span>`);
     const lbls = labelChipsHtml(id);
-    if (lbls) meta.unshift(`<span class="fm-lbls">${lbls}</span>`);
+    if (lbls) meta.unshift(`<span class="fm-lbls fm-lbls-dots">${labelDotsHtml(id)}</span><span class="fm-lbls fm-lbls-full">${lbls}</span>`);
   } else if (roster.missing.has(id)) meta.push('<span>캐릭터가 지워졌습니다</span>');
   else if (roster.failed.has(id)) meta.push(`<button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
   if (c && roster.failed.has(id)) meta.unshift(`<span class="fm-warn">갱신 실패</span><button class="fm-link" data-retry="${esc(id)}">다시 읽기</button>`);
@@ -4625,7 +4762,7 @@ function cardHtml(id, container) {
   const state = ghost ? ' ghost-bot' : failed ? ' failed' : !c ? ' loading' : '';
   return `<div class="fm-card${selected ? ' sel' : ''}${state}" data-id="${esc(id)}" data-container="${esc(container)}" title="${esc(c ? c.name : id)}" tabindex="0" role="checkbox" aria-checked="${selected}" aria-label="${esc(name)}">
     ${avatarHtml(c, id)}<div class="fm-txt"><div class="fm-name">${esc(name)}</div><div class="fm-meta">${meta.join('')}</div></div>
-    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${c ? `<button class="fm-loc" data-locate="${esc(id)}" title="사이드바에서 찾기" aria-label="사이드바에서 찾기">${icon('locate')}</button>` : ''}${labelButtonHtml(id)}${favStarButton(id)}</div></div>`;
+    <div class="fm-tick">${icon('check')}</div><div class="fm-acts">${favIsStar(id) ? favStarButton(id) : ''}${c ? `<button class="fm-more" data-more="${esc(id)}" title="찾기 · 라벨 · 즐겨찾기 · 옮기기" aria-label="${esc(name)} 메뉴" aria-haspopup="menu">${icon('more')}</button>` : ''}</div></div>`;
 }
 
 function gridHtml(ids, container, emptyText, filter = true) {
@@ -4642,7 +4779,15 @@ function folderTileHtml(f) {
   const count = f.data.length - gone;
   const tip = `${f.name || '이름 없음'} · 봇 ${count}개${gone ? ` · 지워진 자리 ${gone}` : ''}`;
   return `<button class="fm-ftile${f.data.length ? '' : ' empty'}" style="--c:${FOLDER_HEX[f.color] || FOLDER_HEX.default}" data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}" title="${esc(tip)}" aria-label="${esc(tip)}">
-    ${icon('grip', 'fm-grip')}${folderThumb(f)}<span class="fm-fcount">${count}</span><span class="fm-ftile-text"><b>${esc(f.name || '이름 없음')}</b></span>${favIsPin(f.id) ? `<span class="fm-fav-pin" title="고정한 폴더">${icon('star')}</span>` : ''}</button>`;
+    ${icon('grip', 'fm-grip')}${folderThumb(f, 'big')}<span class="fm-fcount">${count}</span><span class="fm-ftile-text"><b>${esc(f.name || '이름 없음')}</b></span>${favIsPin(f.id) ? `<span class="fm-fav-pin" title="고정한 폴더">${icon('star')}</span>` : ''}</button>`;
+}
+
+// 검색어에 맞는 명령(도구)도 검색 결과 맨 위에 보여 준다. 누르면 바로 실행한다.
+function cmdSearchHtml() {
+  if (!ui.query || ui.reorder) return '';
+  const hits = PALETTE_CMDS.filter(([, , t]) => t.toLowerCase().includes(ui.query));
+  if (!hits.length) return '';
+  return `<section class="fm-section"><div class="fm-section-head"><h3>명령</h3><span>${hits.length}</span></div><div class="fm-cmds">${hits.map(([a, i, t]) => `<button class="fm-btn" data-act="${a}">${icon(i)}${esc(t)}</button>`).join('')}</div></section>`;
 }
 
 // ── 그리기 ──
@@ -4653,11 +4798,11 @@ function renderRail() {
     `<button class="fm-nav${extra}" ${attrs}>${thumb}<span class="fm-nav-name">${esc(name)}</span><span class="fm-nav-count">${count}</span>${icon('grip', 'fm-grip')}</button>`;
   const rows = [
     `<button class="fm-nav fm-mob" data-act="folder-list"><span class="fm-thumb plain">${icon('search')}</span><span class="fm-nav-name">폴더 목록</span></button>`,
-    nav(`data-view="${VIEW_ALL}"`, `<span class="fm-thumb plain">${icon('layers')}</span>`, '모든 폴더', folders.length, ui.view === VIEW_ALL ? ' on' : ''),
+    nav(`data-view="${VIEW_ALL}"`, `<span class="fm-thumb plain">${icon('layers')}</span>`, '모든 폴더', folders.reduce((n, f) => n + f.data.length, 0) + root.length, ui.view === VIEW_ALL ? ' on' : ''),
     nav(`data-view="${ROOT}" data-drop="${ROOT}"`, `<span class="fm-thumb plain">${icon('inbox')}</span>`, '폴더 밖', root.length, ui.view === ROOT ? ' on' : ''),
     favRailHtml({ folders, root }, nav),
     labelRailHtml(nav),
-    `<div class="fm-rail-label"><span>폴더 ${folders.length}</span></div>`,
+    `<div class="fm-rail-label"><span>폴더 ${folders.length}</span>${ui.reorder || folders.length < 2 ? '' : `<button class="fm-rail-add" data-act="sort-folders" title="폴더 정렬" aria-label="폴더 정렬">${icon('sort')}</button>`}</div>`,
     ...folders.map((f) =>
       nav(`data-view="${esc(f.id)}" data-folder="${esc(f.id)}" data-drop="${esc(f.id)}"`, folderThumb(f), f.name || '이름 없음', f.data.length,
         (ui.view === f.id ? ' on' : '') + (f.data.length ? '' : ' empty'))),
@@ -4675,11 +4820,11 @@ function headHtml(model) {
   if (isLabelView(ui.view)) return labelHeadHtml();
 
   const all = model.folders.reduce((n, f) => n + f.data.length, 0) + model.root.length;
-  const scope = ui.query ? '검색 결과 전체' : ui.view === ROOT ? '폴더 밖 전체' : '이 폴더 전체';
+  const scope = ui.query ? '검색 결과 전체' : '전체 선택';
   const selectAll = `<button class="fm-btn" data-act="select-all">${icon('select')}<span class="fm-text">${scope}</span></button>`;
   if (ui.view === VIEW_ALL) {
     return `<span class="fm-thumb plain">${icon('layers')}</span><div class="fm-head-text"><h2>모든 폴더</h2><p>폴더 ${model.folders.length}개 · 봇 ${all}개</p></div>
-      <div class="fm-head-actions">${ui.reorder ? '' : `<button class="fm-btn" data-act="create-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>`}</div>`;
+      <div class="fm-head-actions">${ui.reorder ? '' : `${model.folders.length > 1 ? `<button class="fm-btn" data-act="sort-folders">${icon('sort')}<span class="fm-text">폴더 정렬</span></button>` : ''}<button class="fm-btn" data-act="create-folder">${icon('plus')}<span class="fm-text">새 폴더</span></button>`}</div>`;
   }
   if (ui.view === ROOT) {
     return `${backButton(`<span class="fm-thumb plain">${icon('inbox')}</span>`)}<div class="fm-head-text"><h2>폴더 밖 봇</h2><p>${model.root.length}개 · 사이드바에서 폴더 아래에 놓입니다</p></div>
@@ -4687,17 +4832,13 @@ function headHtml(model) {
   }
   const f = model.folders.find((x) => x.id === ui.view);
   const gone = f.data.filter((id) => roster.missing.has(id)).length;
-  // 휴대폰은 아이콘만으로 뜻이 안 보여 꾸미기 도구를 '더보기' 글자 메뉴로 묶는다.
+  // 꾸미기 도구(이름·색·그림·순서·삭제)는 「폴더 편집」 하나로 묶는다. 넓은 화면은 작은 메뉴, 휴대폰은 큰 글자 창.
   const tools = ui.reorder ? '' : `${selectAll}
-    <button class="fm-btn" data-act="locate-folder" title="사이드바에서 찾기">${icon('locate')}<span class="fm-text">사이드바 찾기</span></button>
-    <button class="fm-btn fm-icon fm-desk" data-act="rename" title="이름 바꾸기" aria-label="이름 바꾸기">${icon('edit')}</button>
-    <button class="fm-btn fm-icon fm-desk" data-act="color" title="색" aria-label="색 바꾸기">${icon('palette')}</button>
-    <button class="fm-btn fm-icon fm-desk" data-act="image" title="폴더 그림" aria-label="폴더 그림 바꾸기">${icon('image')}</button>
-    <button class="fm-btn fm-icon fm-desk" data-act="folder-up" title="위로" aria-label="폴더를 위로">${icon('up')}</button>
-    <button class="fm-btn fm-icon fm-desk" data-act="folder-down" title="아래로" aria-label="폴더를 아래로">${icon('down')}</button>
-    <button class="fm-btn danger fm-desk" data-act="unfold" title="폴더를 지우고 봇은 폴더 밖으로">${icon('unfold')}<span class="fm-text">폴더 삭제</span></button>
-    <button class="fm-btn fm-mob" data-act="folder-more">${icon('more')}<span>더보기</span></button>`;
-  return `${backButton(folderThumb(f))}<div class="fm-head-text"><h2>${esc(f.name || '이름 없음')}</h2><p>봇 ${f.data.length - gone}개${gone ? ` · 지워진 자리 ${gone}` : ''}</p></div>
+    <button class="fm-btn" data-act="locate-folder" title="사이드바에서 찾기">${icon('locate')}<span class="fm-text">사이드바에서 찾기</span></button>
+    <button class="fm-btn" data-act="folder-more" aria-haspopup="menu">${icon('edit')}<span class="fm-text">폴더 편집</span></button>`;
+  const lastAt = f.data.reduce((m, id) => Math.max(m, roster.chars.get(id)?.last || 0), 0);
+  const lastText = lastAt ? ` · 최근 대화 ${timeAgo(lastAt).short}` : '';
+  return `${backButton(folderThumb(f))}<div class="fm-head-text"><h2>${esc(f.name || '이름 없음')}</h2><p>봇 ${f.data.length - gone}개${gone ? ` · 지워진 자리 ${gone}` : ''}${esc(lastText)}</p></div>
     <div class="fm-head-actions">${tools}</div>`;
 }
 
@@ -4713,14 +4854,17 @@ function renderMain(keepScroll) {
   if (ui.view === VIEW_ALL && !ui.query) {
     html += cleanupBannerHtml();
     html += archiveBannerHtml();
-    html += favHomeHtml(model);
     const tiles = model.folders.map(folderTileHtml).join('');
     html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${model.folders.length}</span></div>
       <div class="fm-folders">${tiles || '<div class="fm-empty" style="grid-column:1/-1">폴더가 없습니다. 위의 "새 폴더"로 만드세요</div>'}</div></section>`;
-    html += `<section class="fm-section"><div class="fm-section-head" data-drop="${ROOT}"><i class="fm-dot"></i><h3>폴더 밖 봇</h3><span>${model.root.length}</span></div>
-      ${gridHtml(model.root, ROOT, '모든 봇이 폴더에 들어 있습니다')}</section>`;
+    html += favHomeHtml(model);
+    // 폴더 밖 봇은 몇 줄만 보여 주고 나머지는 「모두 보기」로. 순서 편집·새 폴더에 넣을 봇 고르기 중에는 끌고 고를 수 있게 전부 보인다.
+    const cut = !ui.reorder && !ui.pending && model.root.length > HOME_ROOT_MAX;
+    html += `<section class="fm-section"><div class="fm-section-head" data-drop="${ROOT}"><i class="fm-dot"></i><h3>폴더 밖 봇</h3><span>${model.root.length}</span>${cut ? `<button class="fm-more-link" data-open="${ROOT}">${model.root.length}개 모두 보기 ›</button>` : ''}</div>
+      ${gridHtml(cut ? model.root.slice(0, HOME_ROOT_MAX) : model.root, ROOT, '모든 봇이 폴더에 들어 있습니다')}</section>`;
   } else if (ui.view === VIEW_ALL) {
     // 검색: 폴더 이름이 맞으면 폴더 타일, 봇 이름이 맞으면 폴더별로 봇을 보여 준다.
+    html += cmdSearchHtml();
     html += favSearchHtml();
     const hitFolders = model.folders.filter((f) => (f.name || '').toLowerCase().includes(ui.query));
     if (hitFolders.length) html += `<section class="fm-section"><div class="fm-section-head"><h3>폴더</h3><span>${hitFolders.length}</span></div><div class="fm-folders">${hitFolders.map(folderTileHtml).join('')}</div></section>`;
@@ -4734,12 +4878,13 @@ function renderMain(keepScroll) {
     }
     const unread = roster.mode === 'single' ? roster.ids.filter((id) => !roster.resolved(id)).length : 0;
     if (unread) html += `<p class="fm-note">아직 이름을 읽지 않은 봇 ${unread}개는 검색에 나오지 않습니다. <button class="fm-link" data-act="load-all">모두 읽기</button></p>`;
-    if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더나 봇이 없습니다</div>`;
+    if (!html) html = `<div class="fm-empty">"${esc(ui.query)}"에 맞는 폴더·봇·명령이 없습니다</div>`;
   } else if (isLabelView(ui.view)) {
     html += labelViewHtml();
   } else {
     const inRoot = ui.view === ROOT;
     const stars = ui.view === VIEW_STARS;
+    html += cmdSearchHtml();
     if (stars && !ui.reorder) html += favShortcutBarHtml();
     const ids = stars ? favStarIds() : inRoot ? model.root : model.folders.find((x) => x.id === ui.view).data;
     if (ui.query) {
@@ -5345,7 +5490,7 @@ function shellHtml() {
   return `<div class="fm-root"><div class="fm-app view-${ui.display}">
     <header class="fm-top">
       <div class="fm-brand"><span class="fm-logo">${icon('folder')}</span><div><b>Risu 폴더 마스터</b><small>v${FM_VERSION}</small></div></div>
-      <label class="fm-search">${icon('search')}<input type="search" placeholder="봇·폴더 이름 검색" aria-label="봇과 폴더 검색"><button class="fm-kbd fm-only-desktop" data-act="palette" title="명령 창 (Ctrl+K)" tabindex="-1">Ctrl K</button></label>
+      <label class="fm-search">${icon('search')}<input type="search" placeholder="봇·폴더·명령 검색" aria-label="봇·폴더·명령 검색"><button class="fm-kbd fm-only-desktop" data-act="palette" title="명령 창 (Ctrl+K)" tabindex="-1">Ctrl K</button></label>
       <span class="fm-spacer"></span>
       <span class="fm-busy">저장 중</span>
       <button class="fm-loading" data-act="roster-retry" disabled>봇 정보 불러오는 중</button>
@@ -5360,18 +5505,22 @@ function shellHtml() {
         <div class="fm-menu">
           <button data-display="tiles" class="fm-only-mobile">${icon('tiles')}작은 타일</button>
           <button data-display="list" class="fm-only-mobile">${icon('list')}목록</button>
-          <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
-          <button data-act="palette">${icon('command')}명령 창<small>Ctrl K</small></button>
-          <button data-act="check">${icon('scan')}정리 점검</button>
-          <button data-act="wizard">${icon('wand')}정리 마법사</button>
-          <button data-act="dups">${icon('copy')}중복 봇 찾기</button>
-          <button data-act="archive">${icon('box')}보관함 정리</button>
+          <h6>정리</h6>
+          <button data-act="wizard">${icon('wand')}정리 마법사<small data-n="wizard"></small></button>
+          <button data-act="dups">${icon('copy')}중복 봇 찾기<small data-n="dups"></small></button>
+          <button data-act="archive">${icon('box')}보관함으로 옮기기<small data-n="archive"></small></button>
+          <button data-act="check">${icon('scan')}빈 자리·겹침 검사</button>
+          <h6>꾸미기</h6>
           <button data-act="icons">${icon('image')}폴더 그림 한 번에</button>
+          <button data-act="sidebar">${icon('sidebar')}사이드바 배열</button>
+          <h6>기록</h6>
+          <button data-act="undo">${icon('undo')}되돌리기<small></small></button>
           <button data-act="snapshots">${icon('history')}배치 기록</button>
           <button data-act="stats">${icon('chart')}통계</button>
+          <hr>
+          <button data-act="palette">${icon('command')}명령 창<small>Ctrl K</small></button>
           <button data-act="reload">${icon('refresh')}새로 불러오기</button>
-          <button data-act="fav-view">${icon('star')}즐겨찾는 봇</button>
-          <button data-act="settings">${icon('gear')}설정 · 테마</button>
+          <button data-act="settings">${icon('gear')}설정</button>
         </div>
       </div>
       <button class="fm-btn fm-icon" data-act="close" title="닫기" aria-label="닫기">${icon('close')}</button>
@@ -5411,16 +5560,23 @@ async function openSettings() {
   const official = roster.mode === 'full';
   const result = await openModal(
     `<h3 id="fm-dialog-title">설정</h3>
-     ${plusThemesHtml()}
-     <span class="fm-label">봇 정보 불러오기</span>
-     <div class="fm-options cols2">
-       <button class="fm-option" data-load="lazy">보이는 봇만<small>가볍게 · 기본</small></button>
-       <button class="fm-option" data-load="all">열 때 모두 한 번에<small>검색·점검이 바로 됨</small></button>
+     <div class="fm-set">
+       <div class="fm-set-tabs" role="tablist" aria-label="설정 갈래">
+         ${[['look', 'palette', '화면'], ['side', 'sidebar', '사이드바 폴더'], ['label', 'tag', '라벨'], ['clean', 'box', '정리 · 보관함'], ['load', 'refresh', '불러오기']].map(([k, i, t]) => `<button role="tab" data-tab="${k}">${icon(i)}<span>${t}</span></button>`).join('')}
+       </div>
+       <div class="fm-set-body">
+         <section data-pane="look">${plusThemesHtml()}</section>
+         <section data-pane="side" hidden>${plusSidebarSettingsHtml(draft)}</section>
+         <section data-pane="label" hidden>${labelSettingsHtml(draft)}</section>
+         <section data-pane="clean" hidden>${archiveSettingsHtml(draft)}</section>
+         <section data-pane="load" hidden><span class="fm-label">봇 정보 불러오기</span>
+           <div class="fm-options cols2">
+             <button class="fm-option" data-load="lazy">보이는 봇만<small>가볍게 · 기본</small></button>
+             <button class="fm-option" data-load="all">열 때 모두 한 번에<small>검색·점검이 바로 됨</small></button>
+           </div>
+           <p class="fm-note" data-load-note></p></section>
+       </div>
      </div>
-     <p class="fm-note" data-load-note></p>
-     ${plusSidebarSettingsHtml(draft)}
-     ${labelSettingsHtml(draft)}
-     ${archiveSettingsHtml(draft)}
      <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button><button class="fm-btn primary" data-ok>저장</button></div>`,
     (modal, close) => {
       const sync = () => {
@@ -5432,6 +5588,15 @@ async function openSettings() {
             ? '창을 열 때마다 모든 봇을 3개씩 차례로 읽습니다. 해적 RisuAI는 봇 하나를 읽을 때 그 채팅까지 받으므로, 봇이 많으면 오래 걸리고 서버에 부담이 됩니다. 이 기기에만 적용됩니다.'
             : '화면에 보이는 봇만 읽고, 읽은 이름은 이 기기에 저장해 다음에 바로 보여 줍니다. 이 기기에만 적용됩니다.';
       };
+      modal.classList.add('fm-big', 'fm-set-modal');
+      const showTab = (k) => {
+        ui.setTab = k;
+        modal.querySelectorAll('[data-tab]').forEach((b) => { const on = b.dataset.tab === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+        modal.querySelectorAll('[data-pane]').forEach((el) => { el.hidden = el.dataset.pane !== k; });
+        modal.querySelector('.fm-set-body').scrollTop = 0;
+      };
+      modal.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
+      showTab(modal.querySelector(`[data-tab="${ui.setTab}"]`) ? ui.setTab : 'look');
       modal.querySelectorAll('[data-theme]').forEach(b=>{b.onclick=()=>{plusApplyTheme(b.dataset.theme);modal.querySelectorAll('[data-theme]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})}});
       modal.querySelectorAll('[data-load]').forEach((b) => { b.onclick = () => { loadAll = b.dataset.load === 'all'; sync(); }; });
       plusSidebarSettingsBind(modal, draft);
@@ -5556,7 +5721,7 @@ function closeFolderMenu() {
 function onFolderMenuOutside(e) { if (!e.target.closest?.('.fm-ctx')) closeFolderMenu(); }
 function onFolderMenuKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeFolderMenu(); } }
 
-function openFolderMenu(fid, x, y) {
+function openFolderMenu(fid, x, y, only = null) {
   const fav = fid === VIEW_STARS;
   const lab = isLabelView(fid) ? labelDef(fid.slice(VIEW_LABEL.length)) : null;
   const f = fav ? { id: VIEW_STARS, name: favFolderTitle() } : lab ? { id: fid, name: labelText(lab) } : folderById(fid);
@@ -5566,7 +5731,7 @@ function openFolderMenu(fid, x, y) {
   const el = document.createElement('div');
   el.className = 'fm-ctx';
   el.setAttribute('role', 'menu');
-  const items = fav ? favMenuItems() : lab ? labelMenuItems(lab.id) : FOLDER_ITEMS;
+  const items = fav ? favMenuItems() : lab ? labelMenuItems(lab.id) : only || FOLDER_ITEMS;
   el.innerHTML = `<h4>${esc(f.name || '폴더')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}"${a === 'unfold' || a === 'label-delete' ? ' class="danger"' : ''}>${icon(i)}${fav || lab ? t : folderItemLabel(a, t, f.id)}</button>`).join('');
   document.body.append(el);
   const w = el.offsetWidth;
@@ -5582,6 +5747,91 @@ function openFolderMenu(fid, x, y) {
   document.addEventListener('pointerdown', onFolderMenuOutside, true);
   document.addEventListener('keydown', onFolderMenuKey, true);
   el.querySelector('button')?.focus();
+}
+
+// 봇 칸의 ⋯(또는 오른쪽 클릭·길게 누르기) 메뉴.
+function openCardMenu(id, x, y) {
+  if (ui.reorder || !roster.chars.get(id) || document.querySelector('.fm-modal-back')) return;
+  closeFolderMenu();
+  ui.menuAt = Date.now();
+  const el = document.createElement('div');
+  el.className = 'fm-ctx';
+  el.setAttribute('role', 'menu');
+  const items = [['locate', 'locate', '사이드바에서 찾기'], ['label', 'tag', '라벨 붙이기…'], ['star', 'star', favIsStar(id) ? '즐겨찾기 해제' : '즐겨찾기에 추가'], ['move', 'folder', '다른 폴더로 옮기기…']];
+  el.innerHTML = `<h4>${esc(botName(id) || '봇')}</h4>` + items.map(([a, i, t]) => `<button role="menuitem" data-a="${a}">${icon(i)}${t}</button>`).join('');
+  document.body.append(el);
+  el.style.left = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, x)) + 'px';
+  el.style.top = Math.max(8, Math.min(innerHeight - el.offsetHeight - 8, y)) + 'px';
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-a]');
+    if (!b) return;
+    closeFolderMenu();
+    runBotAction(b.dataset.a, id);
+  });
+  document.addEventListener('pointerdown', onFolderMenuOutside, true);
+  document.addEventListener('keydown', onFolderMenuKey, true);
+  el.querySelector('button')?.focus();
+}
+
+async function runBotAction(act, id) {
+  if (act === 'locate') locateBot(id);
+  else if (act === 'star') favToggleStar(id);
+  else if (act === 'label') openLabelPicker([id]);
+  else if (act === 'move') {
+    const target = await pickFolder('봇 옮기기', { mode: 'move', ids: [id] });
+    if (target === '__new__') { ui.selected = new Set([id]); newFolderFromSelection(); }
+    else if (target) save(`${botName(id) || '봇'} → ${folderById(target)?.name || '폴더'}`, (o) => moveBotsToFolder(o, [id], target));
+  }
+}
+
+// 도구 메뉴 옆의 할 일 개수. 메뉴를 열 때만 센다.
+function menuCounts(menu) {
+  const set = (k, t) => { const el = menu.querySelector(`[data-n="${k}"]`); if (el) el.textContent = t; };
+  try {
+    const { root } = currentModel();
+    set('wizard', root.length ? `폴더 밖 ${root.length}` : '');
+    const dups = findDuplicates(orderBotIds(ui.order), roster.chars, plusStore.state.dupIgnore).length;
+    set('dups', dups ? `${dups}묶음` : '');
+    const arch = archiveList(plusStore.state.archive.days).filter((x) => !favIsStar(x.id)).length;
+    set('archive', arch ? `${arch}개` : '');
+  } catch {}
+}
+
+// 폴더 정렬: 폴더끼리의 순서만 바꾼다(폴더 안 봇 순서·폴더 밖 봇 자리는 그대로).
+async function sortFoldersDialog() {
+  if (ui.reorder) return;
+  const { folders, root } = currentModel();
+  if (folders.length < 2) { toast('정렬할 폴더가 2개 이상 있어야 합니다'); return; }
+  const last = (f) => f.data.reduce((m, id) => Math.max(m, roster.chars.get(id)?.last || 0), 0);
+  const unread = roster.mode === 'single' ? orderBotIds(ui.order).filter((id) => !roster.resolved(id)).length : 0;
+  const by = await openModal(
+    `<h3 id="fm-dialog-title">폴더 정렬</h3><p class="fm-desc">폴더 ${folders.length}개의 순서를 한 번에 바꿉니다. 폴더 안의 봇 순서는 그대로이고, 「되돌리기」로 돌아올 수 있습니다.</p>
+     <div class="fm-sheet">
+       <button class="fm-btn" data-by="name">${icon('sort')}이름순</button>
+       <button class="fm-btn" data-by="recent">${icon('clock')}최근 대화한 폴더 먼저</button>
+       <button class="fm-btn" data-by="count">${icon('layers')}봇이 많은 폴더 먼저</button>
+     </div>
+     ${unread ? `<p class="fm-note">아직 읽지 않은 봇 ${unread}개는 대화 시각을 몰라 「최근 대화」 정렬에 반영되지 않습니다.</p>` : ''}
+     <div class="fm-modal-actions"><button class="fm-btn" data-x>취소</button></div>`,
+    (modal, close) => {
+      modal.querySelector('[data-x]').onclick = () => close(null);
+      modal.querySelectorAll('[data-by]').forEach((b) => { b.onclick = () => close(b.dataset.by); });
+    },
+  );
+  if (!by) return;
+  const key = { name: (a, b) => (a.name || '').localeCompare(b.name || '', 'ko', { numeric: true }), recent: (a, b) => last(b) - last(a), count: (a, b) => b.data.length - a.data.length }[by];
+  const sorted = folders.map((f, i) => [f, i]).sort((a, b) => key(a[0], b[0]) || a[1] - b[1]).map(([f]) => f);
+  if (sorted.every((f, i) => f.id === folders[i].id)) { toast('이미 그 순서입니다'); return; }
+  const label = { name: '폴더를 이름순으로 정렬', recent: '폴더를 최근 대화순으로 정렬', count: '폴더를 봇 수순으로 정렬' }[by];
+  const ids = sorted.map((f) => f.id);
+  await save(label, (o) => {
+    const now = o.filter(isFolder);
+    const byId = new Map(now.map((f) => [f.id, f]));
+    // 그 사이 생긴 폴더는 원래 순서대로 뒤에 둔다.
+    const next = [...ids.filter((id) => byId.has(id)), ...now.map((f) => f.id).filter((id) => !ids.includes(id))];
+    let i = 0;
+    return o.map((item) => (isFolder(item) ? byId.get(next[i++]) : item));
+  });
 }
 
 function folderOf(target) {
@@ -5628,10 +5878,16 @@ const ACTIONS = {
   'locate-folder': () => locateInSidebar({ id: null, folder: ui.view }),
   'load-all': () => loadAllNames(),
   close: async () => { if (ui.reorder && !(await cancelReorder())) return; closeManager(); },
-  'folder-more': () => folderMoreSheet(),
+  'folder-more': () => {
+    if (matchMedia('(max-width:760px)').matches) { folderMoreSheet(); return; }
+    const r = ui.app.querySelector('.fm-head [data-act="folder-more"]')?.getBoundingClientRect();
+    openFolderMenu(ui.view, r ? r.right - 190 : 40, r ? r.bottom + 6 : 40, FOLDER_ITEMS.filter(([a]) => a !== 'locate'));
+    ui.menuAt = 0; // 버튼으로 연 메뉴는 길게 누르기 뒤의 클릭 무시 시간을 두지 않는다
+  },
   'show-selection': () => showSelection(),
   'folder-list': () => goToFolderPicker(),
-  menu: () => ui.app.querySelector('.fm-menu').classList.toggle('open'),
+  menu: () => { const m = ui.app.querySelector('.fm-menu'); if (m.classList.toggle('open')) menuCounts(m); },
+  'sort-folders': () => sortFoldersDialog(),
   undo: () => undo(),
   check: () => runCheck(),
   reload: () => reload(),
@@ -5699,6 +5955,8 @@ function bindEvents(root) {
     if (nav) { const inRail = !!nav.closest('.fm-rail'); openView(inRail && nav.dataset.view === ui.view && ui.view !== VIEW_ALL && !ui.query ? VIEW_ALL : nav.dataset.view); if (inRail) ui.app.querySelector(`.fm-rail [data-view="${CSS.escape(nav.dataset.view)}"]`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); return; }
     const retry = t.closest('[data-retry]');
     if (retry) { rosterRetry([retry.dataset.retry]); return; }
+    const more = t.closest('[data-more]');
+    if (more) { if (!ui.reorder) { const r = more.getBoundingClientRect(); openCardMenu(more.dataset.more, r.right - 180, r.bottom + 4); ui.menuAt = 0; } return; }
     const star = t.closest('[data-star]');
     if (star) { if (!ui.reorder) favToggleStar(star.dataset.star); return; }
     const tag = t.closest('[data-tag]');
@@ -5718,6 +5976,14 @@ function bindEvents(root) {
   // 폴더 메뉴: 오른쪽 클릭(안드로이드는 길게 누르면 contextmenu 도 온다) + 터치 길게 누르기(아이폰용).
   root.addEventListener('contextmenu', (e) => {
     const fid = !ui.reorder && folderOf(e.target);
+    const cardEl = !fid && !ui.reorder && e.target.closest?.('.fm-card');
+    if (cardEl && roster.chars.get(cardEl.dataset.id)) {
+      e.preventDefault();
+      if (Date.now() - (ui.menuAt || 0) < 450) return;
+      const cr = e.clientX || e.clientY ? null : cardEl.getBoundingClientRect();
+      openCardMenu(cardEl.dataset.id, cr ? cr.left + 8 : e.clientX, cr ? cr.bottom : e.clientY);
+      return;
+    }
     if (!fid) return;
     e.preventDefault();
     if (Date.now() - (ui.menuAt || 0) < 450) return;
@@ -5730,8 +5996,9 @@ function bindEvents(root) {
     cancelPress();
     if (e.pointerType === 'mouse' || ui.reorder) return;
     const fid = folderOf(e.target);
-    if (!fid) return;
-    press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => { press = null; openFolderMenu(fid, e.clientX - 20, e.clientY + 12); }, 520) };
+    const cid = !fid && !e.target.closest?.('button') ? e.target.closest?.('.fm-card')?.dataset.id : null;
+    if (!fid && !cid) return;
+    press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => { press = null; if (fid) openFolderMenu(fid, e.clientX - 20, e.clientY + 12); else openCardMenu(cid, e.clientX - 20, e.clientY + 12); }, 520) };
   });
   root.addEventListener('pointermove', (e) => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress(); });
   ['pointerup', 'pointercancel', 'scroll'].forEach((t) => root.addEventListener(t, cancelPress, true));

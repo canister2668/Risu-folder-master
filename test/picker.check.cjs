@@ -59,7 +59,7 @@ async function boot(b, viewport) {
 
   // 글씨 바꾸기
   await p.click('.fm-ftile[data-folder="f-abydos"]'); await p.waitForTimeout(250);
-  await p.click('.fm-head [data-act="image"]'); await p.waitForSelector('.fm-ip');
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="image"]'); await p.waitForSelector('.fm-ip');
   await p.click('.fm-ip-tile[data-tpl="fantasy"]'); await p.click('[data-edit]'); await p.waitForTimeout(800);
   ok(await p.evaluate(() => document.querySelector('[data-text]').value) === '아비도스 대책위', 'edit starts with the folder name (8 chars max)', await p.evaluate(() => document.querySelector('[data-text]').value));
   ok(await p.evaluate(() => !!document.querySelector('[data-new] canvas')), 'blank board composed into a canvas');
@@ -71,7 +71,7 @@ async function boot(b, viewport) {
   ok(await folderImg(p, 'f-abydos') === 'img3' && await p.evaluate(() => { const s = window.__saved.at(-1); return s[0] === 0x52 && s[8] === 0x57; }), 'edited sign saved as WebP');
 
   // 카드 3장 템플릿에 2글자 → 가운데부터, 남는 카드는 빈칸
-  await p.click('.fm-head [data-act="image"]'); await p.waitForSelector('.fm-ip');
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="image"]'); await p.waitForSelector('.fm-ip');
   await p.click('.fm-ip-tile[data-tpl="multi"]'); await p.click('[data-edit]'); await p.fill('[data-text]', '얼헌'); await p.waitForTimeout(900);
   await shot(p, 'picker-multi');
   // 아르곤 빈 종이판에 새 글씨
@@ -94,11 +94,11 @@ async function boot(b, viewport) {
   await p.click('[data-apply]'); await p.waitForTimeout(600);
   ok(!(await p.$('.fm-ip')), 'my image applied');
   // 기본 아이콘으로
-  await p.click('.fm-head [data-act="image"]'); await p.waitForSelector('.fm-ip'); await p.click('[data-reset]'); await p.waitForTimeout(500);
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="image"]'); await p.waitForSelector('.fm-ip'); await p.click('[data-reset]'); await p.waitForTimeout(500);
   ok(await folderImg(p, 'f-abydos') === '', 'reset to default icon');
   // 받기 실패
   await p.evaluate(() => { window.__tplOffline = true; });
-  await p.click('.fm-head [data-act="image"]'); await p.waitForSelector('.fm-ip');
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="image"]'); await p.waitForSelector('.fm-ip');
   await p.click('.fm-ip-tile[data-tpl="sf"]'); await p.click('[data-apply]'); await p.waitForTimeout(400);
   ok(await p.isVisible('.fm-toast.error') && await p.isVisible('.fm-ip') && await folderImg(p, 'f-abydos') === '', 'offline: error toast, dialog stays, nothing saved', await p.textContent('.fm-toast'));
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);

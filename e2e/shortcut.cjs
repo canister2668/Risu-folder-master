@@ -24,9 +24,9 @@ const openFM = async (p) => { await p.click('.rs-sidebar-toggle-button'); await 
     await F.click('.fm-nav[data-view="__all__"]'); await p.waitForTimeout(300);
     // 별표 2개(폴더 안 1, 폴더 밖 1)
     await F.click(`.fm-nav[data-view="${folder.id}"]`); await p.waitForTimeout(800);
-    await F.hover(`.fm-card[data-id="${stars[0]}"]`); await F.click(`.fm-card[data-id="${stars[0]}"] [data-star]`); await p.waitForTimeout(600);
+    await F.hover(`.fm-card[data-id="${stars[0]}"]`); await F.click(`.fm-card[data-id="${stars[0]}"] [data-more]`); await F.click('.fm-ctx [data-a="star"]'); await p.waitForTimeout(600);
     await F.click('.fm-nav[data-view="__root__"]'); await p.waitForTimeout(800);
-    await F.hover(`.fm-card[data-id="${stars[1]}"]`); await F.click(`.fm-card[data-id="${stars[1]}"] [data-star]`); await p.waitForTimeout(600);
+    await F.hover(`.fm-card[data-id="${stars[1]}"]`); await F.click(`.fm-card[data-id="${stars[1]}"] [data-more]`); await F.click('.fm-ctx [data-a="star"]'); await p.waitForTimeout(600);
     await F.click('.fm-nav[data-view="__favorites__"]'); await p.waitForTimeout(500);
     await F.click('[data-act="fav-folder-toggle"]'); await p.waitForTimeout(3000);
     let o = (await db(['characterOrder'])).characterOrder;

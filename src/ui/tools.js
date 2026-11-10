@@ -206,27 +206,29 @@ async function openDuplicates() {
     if (!live().length) return '<div class="fm-empty">이름이 같거나 비슷한 봇이 없습니다</div>';
     return live().map((g) => {
       const first = roster.chars.get(g.ids[0]);
-      return `<section class="fm-dupe"><div class="fm-dupe-h">${avatarHtml(first, g.ids[0])}<b>${esc(first.name)}</b><span class="fm-badge warn">${g.ids.length}개</span><small>${g.same ? '이름 같음' : '이름 비슷함'}</small>
-        <button class="fm-link" data-dup-ignore="${esc(g.key)}">이 묶음 무시</button></div>
+      return `<section class="fm-dupe"><div class="fm-dupe-h">${avatarHtml(first, g.ids[0])}<div class="fm-dupe-t"><b>${esc(first.name)}</b><small>${g.same ? '이름 같음' : '이름 비슷함'} · ${g.ids.length}개</small></div>
+        <button class="fm-dupe-skip" data-dup-ignore="${esc(g.key)}" title="이 묶음은 다음부터 중복으로 보지 않습니다">무시</button></div>
         <div class="fm-dupe-rows">${g.ids.map((id) => {
           const c = roster.chars.get(id);
           const t = timeAgo(c.last);
           const on = pick.has(id);
           return `<div class="fm-dupe-row${on ? ' picked' : ''}">${favSwitchHtml(on, `data-dup-pick="${esc(id)}"`, `${c.name} 정리 대상`)}
-            <span class="fm-dupe-name">${esc(c.name)}</span><span class="fm-dupe-where">${icon('folder')}${esc(favFolderName(id))}</span><span class="fm-dupe-last">${t ? esc(t.short) : '대화 없음'}</span>
-            <button class="fm-btn fm-sm" data-dup-loc="${esc(id)}">${icon('locate')}찾기</button></div>`;
+            <div class="fm-dupe-t"><span class="fm-dupe-name">${esc(c.name)}</span><small>${esc(favFolderName(id))} · ${t ? esc(t.short) : '대화 없음'}</small></div>
+            <button class="fm-btn fm-sm" data-dup-loc="${esc(id)}" title="사이드바에서 찾기" aria-label="${esc(c.name)} 사이드바에서 찾기">${icon('locate')}<span>찾기</span></button></div>`;
         }).join('')}</div></section>`;
     }).join('');
   };
   const picked = () => live().flatMap((g) => g.ids.filter((id) => pick.has(id)));
   const act = await openModal(
     `<h3 id="fm-dialog-title">${icon('copy')} 중복 봇 찾기</h3>
-     <p class="fm-desc">이름이 같거나 버전 표기·「사본」만 다른 봇을 묶었습니다. 정리할 봇을 켜고 「정리 폴더로 꺼내기」를 누르면 사이드바 맨 위 「${CLEANUP_NAME}」 폴더에 모입니다. 거기서 봇을 눌러 RisuAI에서 지우세요. 폴더는 닫으면 사라지고, 봇은 원래 자리 그대로입니다.</p>
+     <p class="fm-desc">이름이 같거나 버전 표기·「사본」만 다른 봇을 묶었습니다.</p>
+     <ol class="fm-steps"><li class="on"><b>1 고르기</b>지울 쪽을 켭니다</li><li><b>2 꺼내기</b>사이드바 맨 위 「${CLEANUP_NAME}」 폴더로</li><li><b>3 지우기</b>거기서 봇을 눌러 RisuAI에서 삭제</li></ol>
+     <p class="fm-steps-note">정리 폴더는 닫으면 사라지고, 지우지 않은 봇은 원래 자리 그대로입니다.</p>
      ${unreadNote(ids, '중복 찾기')}
      <div class="fm-dupes" data-rows>${body()}</div>
-     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn" data-dup-archive>📦 보관함으로</button><button class="fm-btn primary" data-dup-clean>🧹 정리 폴더로 꺼내기</button></div>`,
+     <div class="fm-modal-actions"><span class="fm-count-note" data-rest></span><span class="fm-spacer"></span><button class="fm-btn" data-x>닫기</button><button class="fm-btn" data-dup-archive>보관함으로</button><button class="fm-btn primary" data-dup-clean>정리 폴더로 꺼내기</button></div>`,
     (modal, close) => {
-      modal.classList.add('fm-big');
+      modal.classList.add('fm-big', 'fm-dup-modal');
       const rows = modal.querySelector('[data-rows]');
       const sync = () => {
         rerender(rows, body());
@@ -235,7 +237,7 @@ async function openDuplicates() {
         modal.querySelector('[data-dup-archive]').disabled = !n;
         const clean = modal.querySelector('[data-dup-clean]');
         clean.disabled = !n;
-        clean.textContent = n ? `🧹 정리 폴더로 꺼내기 (${n})` : '🧹 정리 폴더로 꺼내기';
+        clean.textContent = n ? `정리 폴더로 꺼내기 (${n})` : '정리 폴더로 꺼내기';
         lazyAvatars(rows);
       };
       rows.addEventListener('click', (e) => {
@@ -365,8 +367,8 @@ function archiveBannerHtml() {
   if (!a.on || ui.reorder || Date.now() < a.snooze) return '';
   const n = archiveList(a.days).filter((x) => !favIsStar(x.id)).length;
   if (n < ARCHIVE_MIN) return '';
-  return `<div class="fm-arch-banner"><span class="fm-arch-ic">${icon('box')}</span><div><b>${a.days}일 넘게 대화하지 않았거나 다 본 봇이 ${n}개 있어요</b><small>보관함 폴더로 옮기면 사이드바가 짧아집니다. 채팅은 그대로 남습니다.</small></div>
-    <button class="fm-btn" data-act="archive-snooze">나중에</button><button class="fm-btn primary" data-act="archive">골라서 옮기기</button></div>`;
+  return `<div class="fm-arch-banner"><span class="fm-arch-ic">${icon('box')}</span><div><b>${a.days}일 넘게 쉬었거나 다 본 봇 ${n}개</b><small>보관함 폴더로 옮기면 사이드바가 짧아집니다. 채팅은 그대로 남습니다.</small></div>
+    <button class="fm-link" data-act="archive">골라서 옮기기</button><button class="fm-arch-later" data-act="archive-snooze">나중에</button></div>`;
 }
 
 async function openArchive(opts = {}) {
@@ -560,15 +562,16 @@ const PALETTE_CMDS = [
   ['create-folder', 'plus', '새 폴더'],
   ['wizard', 'wand', '정리 마법사'],
   ['dups', 'copy', '중복 봇 찾기'],
-  ['archive', 'box', '보관함 정리'],
+  ['archive', 'box', '보관함으로 옮기기'],
   ['snapshots', 'history', '배치 기록'],
   ['icons', 'image', '폴더 그림 한 번에'],
   ['stats', 'chart', '통계'],
-  ['check', 'scan', '정리 점검'],
+  ['check', 'scan', '빈 자리·겹침 검사'],
   ['fav-view', 'star', '즐겨찾는 봇'],
   ['reorder', 'move', '순서 편집'],
   ['sidebar', 'sidebar', '사이드바 배열'],
-  ['settings', 'gear', '설정 · 테마'],
+  ['settings', 'gear', '설정'],
+  ['sort-folders', 'sort', '폴더 정렬'],
   ['reload', 'refresh', '새로 불러오기'],
 ];
 
@@ -739,17 +742,24 @@ const PLUS_CSS = `
 .fm-snap-acts{display:flex;gap:6px;flex:none}
 .fm-dupes,.fm-wzs{display:grid;gap:10px}
 .fm-dupe{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.fm-dupe-h{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface)}
+.fm-dupe-h{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 12px;background:var(--surface)}
+.fm-dupe-t{min-width:0}
+.fm-dupe-t b,.fm-dupe-t .fm-dupe-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fm-dupe-h b{font-size:13.5px}
-.fm-dupe-h small{color:var(--faint);font-size:11.5px}
-.fm-dupe-h .fm-link{margin-left:auto}
-.fm-dupe-row{display:grid;grid-template-columns:auto minmax(0,1.4fr) minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.fm-dupe-h small{display:block;color:#f0b860;font-size:11.5px;font-weight:600}
+:root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-dupe-h small{color:#8a4b08}
+.fm-dupe-row small{display:block;color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-dupe-skip{padding:5px 9px;border-radius:8px;color:var(--muted);font-size:12px;white-space:nowrap}
+.fm-dupe-skip:hover{background:var(--surface-2);color:var(--text)}
+.fm-dupe-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.fm-steps{display:flex;gap:6px;list-style:none;margin:0 0 6px}
+.fm-steps li{flex:1;min-width:0;padding:7px 9px;border-radius:9px;background:var(--surface);font-size:11.5px;color:var(--muted);line-height:1.35}
+.fm-steps li b{display:block;color:var(--text);font-size:12px}
+.fm-steps li.on{background:var(--accent-bg);box-shadow:inset 0 0 0 1px var(--accent)}
+.fm-steps-note{font-size:11.5px;color:var(--faint);margin:0 0 12px}
+.fm-count-note{white-space:nowrap}
 .fm-dupe-row .fm-switch{transform:scale(.85)}
 .fm-dupe-row.picked .fm-dupe-name{color:var(--text);font-weight:650}
-.fm-dupe-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fm-dupe-where{display:inline-flex;align-items:center;gap:4px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.fm-dupe-where .fm-i{width:13px;height:13px;flex:none}
-.fm-dupe-last{color:var(--faint);font-size:11.5px;white-space:nowrap}
 .fm-btn.fm-sm{height:28px;padding:0 9px;font-size:11.5px}
 .fm-btn.fm-sm .fm-i{width:13px;height:13px}
 .fm-wz-modes{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;color:var(--muted)}
@@ -767,11 +777,14 @@ const PLUS_CSS = `
 .fm-minibot{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:var(--surface-2);font-size:11.5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .fm-minibot.more{padding:3px 9px;color:var(--muted)}
 .fm-av.sm{width:20px;height:20px;border-radius:50%;font-size:9px;flex:none}
-.fm-arch-banner{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:0 0 14px;border-radius:12px;border:1px solid #5a4020;background:#1f1b14}
-.fm-arch-banner div{flex:1;min-width:0}
-.fm-arch-banner b{display:block;font-size:13px}
-.fm-arch-banner small{display:block;font-size:11.5px;color:var(--muted)}
-.fm-arch-ic{color:#e0a63a;display:grid}.fm-arch-ic .fm-i{width:24px;height:24px}
+.fm-arch-banner{display:flex;align-items:center;gap:10px;padding:8px 12px;margin:0 0 14px;border-radius:10px;border:1px solid #5a4020;background:#1f1b14}
+.fm-arch-banner div{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.fm-arch-banner b{font-size:12.5px}
+.fm-arch-banner small{font-size:11.5px;color:var(--muted)}
+.fm-arch-banner .fm-link{text-decoration:none;white-space:nowrap}
+.fm-arch-later{color:var(--muted);font-size:12px;white-space:nowrap;padding:4px 6px;border-radius:7px}
+.fm-arch-later:hover{background:rgba(255,255,255,.07);color:var(--text)}
+.fm-arch-ic{color:#e0a63a;display:grid}.fm-arch-ic .fm-i{width:18px;height:18px}
 :root:is([data-fm-theme=mint],[data-fm-theme=blue]) .fm-arch-banner{background:#fff6e6;border-color:#e2c48c}
 .fm-arch-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px;max-height:min(52vh,460px);overflow:auto;padding:2px}
 .fm-arch-row{display:flex;align-items:center;gap:9px;height:48px;padding:0 10px;border-radius:11px;background:var(--surface);border:1px solid var(--line);text-align:left}
@@ -826,17 +839,6 @@ const PLUS_CSS = `
 .fm-pal-op small{color:var(--faint);font-size:11.5px;white-space:nowrap}
 .fm-pal-op em{margin-left:auto;font-style:normal;font-size:11px;color:var(--faint);white-space:nowrap}
 .fm-pal-ft{display:flex;flex-wrap:wrap;gap:14px;padding:8px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
-/* 마우스: 봇 칸 버튼은 이름 위에 겹쳐 띄우고(자리 차지 안 함), 켜진 별·라벨만 늘 보인다 */
-@media (hover:hover){
-  .fm-card,.view-list .fm-card{grid-template-columns:34px minmax(0,1fr)}
-  .view-list .fm-card{grid-template-columns:30px minmax(0,1fr)}
-  .fm-acts{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding-left:16px;background:linear-gradient(90deg,transparent,var(--surface) 16px);border-radius:0 9px 9px 0}
-  .fm-card.sel .fm-acts{background:linear-gradient(90deg,transparent,var(--accent-bg) 16px)}
-  .fm-acts>*{display:none}
-  .fm-acts>.on,.fm-card:hover .fm-acts>*,.fm-card:focus-within .fm-acts>*{display:grid}
-  .fm-card:not(:hover):not(:focus-within) .fm-acts:not(:has(>.on)){display:none}
-  .fm-app.is-reorder .fm-acts{display:none}
-}
 .fm-kbd{font-size:10.5px;padding:0 5px;border-radius:5px;border:1px solid var(--line-2);color:var(--faint);margin-left:4px}
 .fm-search .fm-kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);margin:0;line-height:18px;background:var(--surface)}
 .fm-search .fm-kbd:hover{color:var(--text);border-color:var(--accent)}
@@ -845,20 +847,107 @@ const PLUS_CSS = `
 @media (max-width:640px){
   .fm-stats{grid-template-columns:repeat(2,1fr)}
   .fm-stat-row{grid-template-columns:96px 1fr 54px}
-  .fm-dupe-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:2px}
-  .fm-dupe-where,.fm-dupe-last{grid-column:2}
+  .fm-dupe-row .fm-sm{width:34px;height:34px;padding:0;justify-content:center}
+  .fm-dupe-row .fm-sm span{display:none}
+  .fm-dup-modal .fm-modal-actions{flex-wrap:wrap}
+  .fm-dup-modal .fm-count-note{flex:1 1 100%}
+  .fm-dup-modal .fm-modal-actions .fm-spacer{display:none}
+  .fm-dup-modal .fm-modal-actions .primary{flex:1;justify-content:center}
   .fm-snap{flex-wrap:wrap}.fm-snap-acts{width:100%;justify-content:flex-end}
-  .fm-arch-banner{flex-wrap:wrap;align-items:flex-start}
-  .fm-arch-banner>div{flex:1 1 calc(100% - 48px)}
+  .fm-arch-banner{flex-wrap:wrap}
+  .fm-arch-banner>div{flex:1 1 calc(100% - 40px)}
   .fm-arch-banner .fm-btn{flex:1 1 0;justify-content:center}
+  .fm-arch-banner .fm-link{margin-left:28px}
   .fm-pal-ft{display:none}
+}
+
+/* ── 화면 개편: 봇 칸·폴더 타일·도구 메뉴·설정 갈래 ── */
+.fm-thumb.fm-ini{font-size:14px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.fm-head .fm-thumb.fm-ini{font-size:19px}
+.fm-ftile .fm-thumb{width:62px;height:62px;border-radius:16px}
+.fm-ftile .fm-thumb.fm-ini{font-size:25px}
+.fm-fcount{left:calc(50% + 19px)}
+.fm-thumb.fm-mosaic{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;place-items:stretch;gap:3px;padding:6px;background:var(--surface-2)}
+.fm-mosaic i{position:relative;display:block;border-radius:6px;overflow:hidden;background:var(--line)}
+.fm-mosaic i img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fm-folders{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.fm-grid{grid-template-columns:repeat(auto-fill,minmax(232px,1fr))}
+.fm-card,.view-list .fm-card{grid-template-columns:36px minmax(0,1fr) auto;gap:10px;padding:6px 4px 6px 6px}
+.view-list .fm-card{grid-template-columns:30px minmax(0,1fr) auto;padding:3px 4px 3px 4px}
+.fm-av{width:36px;height:36px;border-radius:9px}
+.fm-name{font-size:13px}
+.fm-meta{font-size:11px;gap:7px}
+.fm-acts{display:flex;align-items:center;gap:0}
+.fm-more{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--faint);transition:background-color .12s,color .12s}
+.fm-more .fm-i{width:16px;height:16px}
+.fm-card:hover .fm-more,.fm-more:focus-visible{color:var(--text)}
+.fm-more:hover{background:var(--bg);color:var(--text)}
+.fm-app.is-reorder .fm-more,.fm-app.is-locating .fm-more{pointer-events:none;opacity:.3}
+.fm-star{opacity:1}
+.fm-meta .fm-lbls-dots{display:inline-flex;align-items:center;gap:3px;min-width:0;flex:0 1 auto;max-width:70%}
+.fm-meta .fm-lbls-dots span{display:block;overflow:hidden;text-overflow:ellipsis;margin-left:2px}
+.fm-ldot{width:7px;height:7px;border-radius:50%;background:var(--c,#8d95a8);flex:none}
+.fm-ldot.new{background:#8d95a8}
+.view-tiles .fm-lbls-full,.view-list .fm-lbls-dots{display:none}
+.fm-section-head .fm-more-link{color:var(--accent-2);font-weight:650}
+.fm-cmds{display:flex;flex-wrap:wrap;gap:6px}
+.fm-menu{min-width:236px;max-height:min(78vh,620px);overflow:auto}
+.fm-menu h6{font-size:10.5px;font-weight:650;letter-spacing:.06em;color:var(--faint);padding:9px 10px 3px}
+.fm-menu hr{border:0;border-top:1px solid var(--line);margin:5px 4px}
+.fm-menu small:empty{display:none}
+.fm-head-text p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 대화상자가 떠 있으면 알림을 위로 올려 아래쪽 버튼을 가리지 않는다 */
+body:has(.fm-modal-back) .fm-toast{bottom:auto;top:14px}
+/* 설정 창 */
+.fm-modal.fm-set-modal{width:min(780px,100%);padding:0;display:flex;flex-direction:column;overflow:hidden}
+.fm-set-modal>h3{padding:16px 18px 10px;margin:0}
+.fm-set{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:0;flex:1;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fm-set-tabs{display:flex;flex-direction:column;gap:2px;padding:10px 8px;background:var(--bg);border-right:1px solid var(--line)}
+.fm-set-tabs button{display:flex;align-items:center;gap:10px;min-height:40px;padding:6px 10px;border-radius:10px;text-align:left;color:var(--muted);font-weight:550}
+.fm-set-tabs button:hover{background:var(--surface)}
+.fm-set-tabs button.on{background:var(--surface-2);color:var(--text);box-shadow:inset 3px 0 var(--accent)}
+.fm-set-body{height:min(60vh,470px);overflow:auto;padding:4px 20px 18px;overscroll-behavior:contain}
+.fm-set-body .fm-label:first-child{margin-top:14px;font-size:14px;color:var(--text)}
+.fm-set-modal .fm-modal-actions{margin:0;padding:12px 18px}
+.fm-set-row{flex-wrap:nowrap;padding:8px 0;margin:0;border-top:1px solid var(--line)}
+.fm-set-row div{flex:1 1 0}
+.fm-set-row.fm-sub-row{border-top:0;padding:3px 0 3px 54px}
+.fm-set-row+.fm-chips{margin-top:0}
+.fm-set-body .fm-note{margin:0 0 12px}
+@media (max-width:760px){
+  .fm-more{width:38px;height:38px}
+  .fm-toast{bottom:150px}
+}
+@media (max-width:640px){
+  .fm-set{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .fm-set-tabs{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 10px;scrollbar-width:none}
+  .fm-set-tabs::-webkit-scrollbar{display:none}
+  .fm-set-tabs button{flex:none;white-space:nowrap;min-height:36px}
+  .fm-set-tabs button.on{box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-bg)}
+  .fm-set-tabs button .fm-i{display:none}
+  .fm-set-body{height:auto;max-height:none;flex:1;padding:4px 14px 16px}
+  .fm-modal.fm-set-modal{height:100%}
+  .fm-set-row.fm-sub-row{padding-left:14px}
+  .fm-steps{flex-direction:row}
+  .fm-steps li{padding:6px 7px;font-size:11px}
+}
+@media (max-width:560px){
+  .fm-grid,.view-list .fm-grid{grid-template-columns:minmax(0,1fr);gap:4px}
+  .view-tiles .fm-card{grid-template-columns:40px minmax(0,1fr) auto;padding:7px 2px 7px 7px}
+  .view-tiles .fm-av{width:40px;height:40px}
+  .view-tiles .fm-name{font-size:14px}
+  .view-tiles .fm-meta{font-size:11.5px}
+  .fm-ftile .fm-thumb{width:56px;height:56px}
+  .fm-card.fm-drop-before{box-shadow:0 -3px 0 -1px var(--accent)}
+  .fm-card.fm-drop-after{box-shadow:0 3px 0 -1px var(--accent)}
+  .fm-fcount{left:calc(50% + 16px)}
 }
 `;
 
 // 설정 창의 보관함 칸.
 function archiveSettingsHtml(d) {
   return `<span class="fm-label">보관함 제안</span>
-     <div class="fm-set-row"><div><b>📦 오래된 봇 보관함 제안</b><small>첫 화면 위에 한 줄 띠로 알려 주기만 합니다. 자동으로 옮기지 않습니다.</small></div>${favSwitchHtml(d.archOn, 'data-arch-on', '보관함 제안 켜기/끄기')}</div>
+     <div class="fm-set-row"><div><b>오래된 봇 보관함 제안</b><small>첫 화면 위에 한 줄 띠로 알려 주기만 합니다. 자동으로 옮기지 않습니다.</small></div>${favSwitchHtml(d.archOn, 'data-arch-on', '보관함 제안 켜기/끄기')}</div>
      <div class="fm-set-row fm-sub-row" data-arch-only><div><b>기준</b><small>이 기간 넘게 대화하지 않은 봇</small></div><div class="fm-fav-sort" role="group">${[30, 60, 90].map((n) => `<button data-arch-days="${n}">${n}일</button>`).join('')}</div></div>`;
 }
 

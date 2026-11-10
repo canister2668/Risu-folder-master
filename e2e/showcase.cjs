@@ -75,7 +75,7 @@ const shot = (p, n, clip) => p.screenshot({ path: path.join(OUT, n + '.png'), cl
     await shot(p, '06_sidebar_grid');
     // 6. 사이드바에서 찾기: 닫힌 폴더 안의 봇
     F = await openFM(p); await F.click('.fm-nav[data-view="show-1"]'); await p.waitForTimeout(1500);
-    await F.click('.fm-card >> nth=2 >> .fm-loc'); await F.waitForSelector('.fm-modal [data-ok]');
+    await F.click('.fm-card >> nth=2 >> [data-more]'); await F.click('.fm-ctx [data-a="locate"]'); await F.waitForSelector('.fm-modal [data-ok]');
     await F.click('.fm-modal [data-ok]'); await p.waitForTimeout(2200);
     await shot(p, '07_locate_folder');
     await p.locator('[x-fm-locate]:not([x-fm-locate="0"])').click(); await p.waitForTimeout(1200);

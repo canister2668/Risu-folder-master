@@ -15,7 +15,7 @@ const fmHidden = (p) => p.evaluate(() => [...document.querySelectorAll('iframe')
   // 1. 폴더 밖 봇
   const rootId = order.filter((x) => typeof x === 'string').at(-1);
   let F = await openFM(p); await p.waitForTimeout(1500);
-  await F.click(`.fm-card[data-id="${rootId}"] .fm-loc`); await p.waitForTimeout(2500);
+  await F.click(`.fm-card[data-id="${rootId}"] [data-more]`); await F.click('.fm-ctx [data-a="locate"]'); await p.waitForTimeout(2500);
   let m = await marked(p); ok(m.n === 1 && m.outline === 'solid', 'loose bot highlighted in the sidebar', m);
   await L.shot(p, 'locate-root');
   await p.locator('[x-fm-locate]:not([x-fm-locate="0"])').click(); await p.waitForTimeout(2500);
@@ -24,7 +24,7 @@ const fmHidden = (p) => p.evaluate(() => [...document.querySelectorAll('iframe')
   const folder = order.filter((x) => typeof x === 'object').at(-1); const inner = folder.data[2];
   F = await openFM(p); await p.waitForTimeout(1200);
   await F.click(`.fm-nav[data-view="${folder.id}"]`); await p.waitForTimeout(1500);
-  await F.click(`.fm-card[data-id="${inner}"] .fm-loc`); await F.waitForSelector('.fm-modal [data-ok]');
+  await F.click(`.fm-card[data-id="${inner}"] [data-more]`); await F.click('.fm-ctx [data-a="locate"]'); await F.waitForSelector('.fm-modal [data-ok]');
   ok((await F.textContent('.fm-modal .fm-desc')).includes('강조됩니다'), 'closed folder: notice before leaving', await F.textContent('.fm-modal .fm-desc'));
   await F.click('.fm-modal [data-ok]'); await p.waitForTimeout(2500);
   m = await marked(p); ok(m.n === 1 && m.css > 124, 'closed folder highlighted', m);
@@ -39,7 +39,7 @@ const fmHidden = (p) => p.evaluate(() => [...document.querySelectorAll('iframe')
   const inner2 = folder.data[0];
   F = await openFM(p); await p.waitForTimeout(1200);
   await F.click(`.fm-nav[data-view="${folder.id}"]`); await p.waitForTimeout(800);
-  await F.click(`.fm-card[data-id="${inner2}"] .fm-loc`); await p.waitForTimeout(2500);
+  await F.click(`.fm-card[data-id="${inner2}"] [data-more]`); await F.click('.fm-ctx [data-a="locate"]'); await p.waitForTimeout(2500);
   const hit2 = await p.evaluate(() => { const els = [...document.querySelectorAll('.rs-sidebar-scroll .rounded-lg.relative .group')]; return els.findIndex((e) => e.getAttribute('x-fm-locate') && e.getAttribute('x-fm-locate') !== '0'); });
   ok(hit2 === 0, 'bot in an open folder highlighted directly', hit2);
   console.log(p.__logs.filter((x) => /PAGEERROR/.test(x)).slice(-5).join('\n'));

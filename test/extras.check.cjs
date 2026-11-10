@@ -34,8 +34,8 @@ const assert = require('node:assert/strict');
     await page.waitForTimeout(500); // 메뉴를 연 손짓의 click 무시 시간(450ms)
     assert.equal(await page.locator('.fm-fav-pin').count(),2, 'pin mark on the pinned tile (home section + folder grid)');
     // 봇 칸 별 버튼 한 번으로 추가(선택되지 않음).
-    await page.hover('.fm-card[data-id="c12"]'); await page.click('.fm-card[data-id="c12"] [data-star]');
-    await page.hover('.fm-card[data-id="c10"]'); await page.click('.fm-card[data-id="c10"] [data-star]');
+    await page.hover('.fm-card[data-id="c12"]'); await page.click('.fm-card[data-id="c12"] [data-more]'); await page.click('.fm-ctx [data-a="star"]');
+    await page.hover('.fm-card[data-id="c10"]'); await page.click('.fm-card[data-id="c10"] [data-more]'); await page.click('.fm-ctx [data-a="star"]');
     await page.waitForTimeout(250);
     assert.equal(await page.locator('.fm-card.sel').count(),0, 'star button does not select the card');
     assert.deepEqual(await fav(),{stars:['c12','c10'],pins:['f-th'],folder:{on:false,name:'',imgFile:''}});
@@ -48,7 +48,7 @@ const assert = require('node:assert/strict');
     assert.equal(await page.evaluate(()=>JSON.stringify(window.__db.characterOrder)),original);
     // 다른 기기에서 넣은 별표를 덮어쓰지 않는다(쓰기 직전 서버 값 다시 읽기).
     await page.evaluate(()=>{const v=window.__store.get('risuFolderMaster.favorites');window.__store.set('risuFolderMaster.favorites',{...v,stars:[...v.stars,'c21']})});
-    await page.hover('.fm-root .fm-grid[data-container="__root__"] .fm-card[data-id="c14"]'); await page.click('.fm-root .fm-grid[data-container="__root__"] .fm-card[data-id="c14"] [data-star]'); await page.waitForTimeout(200);
+    await page.hover('.fm-root .fm-grid[data-container="__root__"] .fm-card[data-id="c14"]'); await page.click('.fm-root .fm-grid[data-container="__root__"] .fm-card[data-id="c14"] [data-more]'); await page.click('.fm-ctx [data-a="star"]'); await page.waitForTimeout(200);
     assert.deepEqual((await fav()).stars,['c12','c10','c13','c21','c14'], 'merge with another device');
     // 검색: 즐겨찾기 맞는 봇이 맨 위
     await page.fill('.fm-search input','노노미'); await page.waitForTimeout(300);

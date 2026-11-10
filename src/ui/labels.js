@@ -63,6 +63,16 @@ function labelChipsHtml(id) {
   return out.join('');
 }
 
+// 좁은 봇 칸용: 라벨마다 색 점 하나 + 이름을 가운뎃점으로 이은 글자.
+function labelDotsHtml(id) {
+  const defs = labelsOf(labelStore.state, id).map(labelDef).filter(Boolean);
+  const fresh = labelIsNew(id);
+  if (!defs.length && !fresh) return '';
+  const dots = defs.map((d) => `<i class="fm-ldot" style="--c:${labelHex(d)}"></i>`).join('') + (fresh ? '<i class="fm-ldot new"></i>' : '');
+  const names = [...defs.map((d) => d.name), ...(fresh ? ['새로 받음'] : [])];
+  return `${dots}<span title="라벨: ${esc(names.join(', '))}">${esc(names.join(' · '))}</span>`;
+}
+
 function labelButtonHtml(id) {
   const n = labelsOf(labelStore.state, id).length;
   return `<button class="fm-tagbtn${n ? ' on' : ''}" data-tag="${esc(id)}" title="라벨" aria-label="라벨 붙이기">${icon('tag')}</button>`;

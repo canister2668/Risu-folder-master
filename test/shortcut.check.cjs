@@ -40,7 +40,7 @@ const SC = 'risu-folder-master-favorites';
     await page.click('[data-act="back"]');
     assert.equal(await page.locator('.fm-folders .fm-ftile').count(), 3);
     // 별표 추가 → 사이드바 폴더에도
-    await page.hover('.fm-grid[data-container="__root__"] .fm-card[data-id="c10"]'); await page.click('.fm-grid[data-container="__root__"] .fm-card[data-id="c10"] [data-star]'); await page.waitForTimeout(500);
+    await page.hover('.fm-grid[data-container="__root__"] .fm-card[data-id="c10"]'); await page.click('.fm-grid[data-container="__root__"] .fm-card[data-id="c10"] [data-more]'); await page.click('.fm-ctx [data-a="star"]'); await page.waitForTimeout(500);
     assert.deepEqual((await order())[0].data, ['c12', 'c21', 'c10']);
     // 폴더 마스터의 일반 저장도 바로가기 폴더를 지키고, 겹침으로 보지 않는다
     await page.click('.fm-grid[data-container="__root__"] .fm-card[data-id="c13"]'); await page.click('[data-act="move"]'); await page.click('[data-pick="f-abydos"]'); await page.click('[data-confirm-move]'); await page.waitForTimeout(900);
@@ -51,10 +51,10 @@ const SC = 'risu-folder-master-favorites';
     await page.keyboard.press('Escape');
     // 해적판처럼 저장이 늦게 반영돼도 빠르게 누른 별표가 서로 덮어쓰지 않는다
     await page.evaluate(() => { window.__storeLag = 1500; });
-    for (const id of ['c11', 'c14']) { await page.hover(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"]`); await page.click(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"] [data-star]`); await page.waitForTimeout(150); }
+    for (const id of ['c11', 'c14']) { await page.hover(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"]`); await page.click(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"] [data-more]`); await page.click('.fm-ctx [data-a="star"]'); await page.waitForTimeout(150); }
     await page.waitForTimeout(2200);
     assert.deepEqual((await fav()).stars, ['c12', 'c21', 'c10', 'c11', 'c14'], 'delayed storage: no lost stars');
-    for (const id of ['c11', 'c14']) { await page.hover(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"]`); await page.click(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"] [data-star]`); await page.waitForTimeout(150); }
+    for (const id of ['c11', 'c14']) { await page.hover(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"]`); await page.click(`.fm-grid[data-container="__root__"] .fm-card[data-id="${id}"] [data-more]`); await page.click('.fm-ctx [data-a="star"]'); await page.waitForTimeout(150); }
     await page.waitForTimeout(2200);
     assert.deepEqual((await fav()).stars, ['c12', 'c21', 'c10']);
     await page.evaluate(() => { window.__storeLag = 0; });
@@ -99,13 +99,13 @@ const SC = 'risu-folder-master-favorites';
     assert.equal(await page.locator('[data-act="fav-folder-toggle"][role="switch"]').getAttribute('aria-checked'), 'false');
     // 설정 창 토글: 저장해야 적용, 취소하면 그대로
     const settings = async () => { await page.click('[data-act="menu"]'); await page.click('[data-act="settings"]'); };
-    await settings(); await page.click('[data-sw="fav"]'); await page.keyboard.press('Escape'); await page.waitForTimeout(500);
+    await settings(); await page.click('[data-tab="side"]'); await page.click('[data-sw="fav"]'); await page.keyboard.press('Escape'); await page.waitForTimeout(500);
     assert.ok(!(await order()).some((x) => x && x.id === SC), 'settings toggle + cancel: nothing written');
-    await settings(); await page.click('[data-sw="fav"]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
+    await settings(); await page.click('[data-tab="side"]'); await page.click('[data-sw="fav"]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
     assert.equal((await order())[0].id, SC, 'settings toggle + save: on');
     assert.equal(await page.locator('[data-act="fav-folder-toggle"]').getAttribute('aria-checked'), 'true');
     await settings(); assert.equal(await page.locator('[data-sw="fav"]').getAttribute('aria-checked'), 'true');
-    await page.click('[data-sw="fav"]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
+    await page.click('[data-tab="side"]'); await page.click('[data-sw="fav"]'); await page.click('.fm-modal [data-ok]'); await page.waitForTimeout(900);
     assert.ok(!(await order()).some((x) => x && x.id === SC), 'settings toggle + save: off');
     assert.deepEqual(errors, []);
     console.log('PASS shortcut: on, star sync, normal saves keep it, no duplicate report, sidebar edits reverted, reload keeps, uninstall/off removes');

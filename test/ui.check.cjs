@@ -58,14 +58,14 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   ok(await p.textContent('.fm-head h2') === '새 친구들', 'jumped to new folder view');
   await shot(p, 'desktop-folder');
   // 이름·색
-  await p.click('[data-act="rename"]'); await p.fill('.fm-modal input', '새 친구'); await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(400);
-  await p.click('[data-act="color"]'); await shot(p, 'desktop-colors'); await p.click('[data-c="green"]'); await p.waitForTimeout(400);
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="rename"]'); await p.fill('.fm-modal input', '새 친구'); await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(400);
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="color"]'); await shot(p, 'desktop-colors'); await p.click('[data-c="green"]'); await p.waitForTimeout(400);
   ok(await p.evaluate(() => { const f = window.__db.characterOrder.find((x) => x.name === '새 친구'); return f && f.color === 'green'; }), 'rename + recolor');
   // 위로
-  await p.click('[data-act="folder-up"]'); await p.waitForTimeout(400);
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="folder-up"]'); await p.waitForTimeout(400);
   ok((await order(p))[2] === '새 친구[c13,c14]', 'folder moved up', await order(p));
   // 폴더 풀기
-  await p.click('[data-act="unfold"]'); await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(400);
+  await p.click('.fm-head [data-act="folder-more"]'); await p.click('.fm-ctx [data-a="unfold"]'); await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(400);
   ok(!(await order(p)).some((x) => x.startsWith('새 친구')) && (await order(p)).includes('c13'), 'unfold spills bots', await order(p));
 
   // 검색
@@ -219,9 +219,9 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   ({ p, errs } = await boot(b, { width: 1280, height: 860 }, '', { pre: () => { window.__single = true; window.__singleDelay = 30; }, noWait: true }));
   await p.waitForTimeout(800);
   const before = await p.evaluate(() => window.__singleCalls);
-  await p.click('[data-act="menu"]'); await p.click('[data-act="settings"]'); await p.waitForSelector('[data-load="all"]');
+  await p.click('[data-act="menu"]'); await p.click('[data-act="settings"]'); await p.waitForSelector('[data-tab="load"]');
   await shot(p, 'desktop-settings');
-  await p.click('[data-load="all"]'); await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(1500);
+  await p.click('[data-tab="load"]'); await p.click('[data-load="all"]'); await p.click('.fm-modal [data-ok]'); await p.waitForTimeout(1500);
   ok(await p.evaluate((b) => window.__singleCalls - b >= 20, before), 'turning on load-all reads every bot in the background', await p.evaluate((b) => window.__singleCalls - b, before));
   await p.click('[data-act="close"]'); await p.waitForTimeout(300);
   await p.evaluate(() => { window.__singleCalls = 0; window.__open(); }); await p.waitForTimeout(2000);
@@ -270,7 +270,7 @@ const order = (p) => p.evaluate(() => window.__db.characterOrder.map((x) => (typ
   const a = await p.locator('.fm-card[data-id="c22"]').boundingBox(); const t = await p.locator('.fm-card[data-id="c26"]').boundingBox();
   const tp = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
   await tp('touchStart', a.x + a.width / 2, a.y + a.height / 2); await p.waitForTimeout(420);
-  for (let i = 1; i <= 8; i++) await tp('touchMove', a.x + a.width / 2 + (t.x + t.width * 0.8 - a.x - a.width / 2) * i / 8, a.y + a.height / 2 + (t.y - a.y) * i / 8);
+  for (let i = 1; i <= 8; i++) await tp('touchMove', a.x + a.width / 2 + (t.x + t.width * 0.8 - a.x - a.width / 2) * i / 8, a.y + a.height / 2 + (t.y + t.height * 0.8 - a.y - a.height / 2) * i / 8); // 휴대폰은 한 줄에 봇 하나라 위·아래로 앞뒤를 정한다
   await p.waitForTimeout(150); await shot(p, 'mobile-dragging'); await tp('touchEnd', 0, 0); await p.waitForTimeout(300);
   await p.tap('[data-act="reorder-save"]'); await p.waitForTimeout(600);
   const o3 = await order(p);
