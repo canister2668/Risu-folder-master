@@ -101,3 +101,21 @@ test('sidebar favorites folder: every write keeps it first, the base never sees 
   assert.equal(await s.saver.syncShortcut(), 'written');
   assert.deepEqual(h.state.order, start());
 });
+
+test('the shortcut home record survives a reload and puts stripped bots back', async () => {
+  const shared = new Map();
+  const home = [{ id: 'f', name: 'F', data: ['a', 'b'] }, 'c'];
+  const sc = { id: 'risu-folder-master-recent', name: '🕘 최근 대화', data: ['b'], color: 'blue', imgFile: '' };
+  const h = host([sc, ...home]);
+  h.Risuai.pluginStorage = { getItem: async (k) => structuredClone(shared.get(k) ?? null), setItem: async (k, v) => { shared.set(k, structuredClone(v)); } };
+  const opts = { shortcutOpts: () => [{ id: 'risu-folder-master-recent', name: '🕘 최근 대화', color: 'blue', ids: ['b'] }] };
+  const s1 = load(files, { Risuai: h.Risuai, ...opts }, ['saver', 'shortcutState']);
+  await s1.saver.syncShortcut();
+  await new Promise((r) => setTimeout(r, 1700));
+  assert.deepEqual(shared.get('risuFolderMaster.home').order, home);
+  // reload; meanwhile a keep-first dedupe removed b from its folder
+  h.state.order = [sc, { id: 'f', name: 'F', data: ['a'] }, 'c'];
+  const s2 = load(files, { Risuai: h.Risuai, ...opts }, ['saver', 'shortcutState']);
+  assert.equal(await s2.saver.syncShortcut(), 'written');
+  assert.deepEqual(h.state.order.slice(1), home);
+});

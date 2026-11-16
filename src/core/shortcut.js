@@ -41,29 +41,57 @@ function dropBotAt(order, id, keepIndex) {
   return out;
 }
 
-// 저장된 순서 → 바로가기 폴더를 뺀 순서. 사이드바 손질로 생긴 흔적을 지난 순서(last, base 모양)를 보고 고친다.
-//  - 바로가기 폴더로 끌려 들어가 원래 자리를 잃은 봇: 지난 자리로, 모르면 폴더 밖 끝으로.
+// last 의 at 번째 항목을 base 에 다시 넣을 자리: last 에서 그 앞에 있던 항목 중 base 에도 있는 가장 가까운 것 바로 뒤(없으면 맨 앞).
+function afterNeighbor(base, last, at) {
+  const key = (x) => (isFolder(x) ? 'f:' + x.id : 's:' + x);
+  const have = new Map(base.map((x, i) => [key(x), i]));
+  for (let i = at - 1; i >= 0; i--) {
+    const k = key(last[i]);
+    if (have.has(k)) return have.get(k) + 1;
+  }
+  return 0;
+}
+
+// 지난 순서(last)에 있던 폴더가 base 에서 사라졌으면 그 자리 근처에 빈 폴더로 다시 만든다.
+// (순정·해적 RisuAI는 빈 폴더를 지운다: 폴더의 마지막 봇을 바로가기 폴더로 끌면 폴더가 없어진다.)
+function reviveFolder(base, last, fid) {
+  const at = last.findIndex((x) => isFolder(x) && x.id === fid);
+  if (at < 0) return null;
+  const folder = { ...last[at], data: [] };
+  if ('img' in folder && typeof folder.img !== 'string') delete folder.img;
+  base.splice(afterNeighbor(base, last, at), 0, folder);
+  return folder;
+}
+
+// 저장된 순서 → 바로가기 폴더를 뺀 순서. 사이드바·다른 앱 손질로 생긴 흔적을 지난 순서(last, base 모양)를 보고 고친다.
+// last 는 기기 사이에 공유하는 기록(risuFolderMaster.home)에서 불러와 새로고침 뒤에도 남는다(store.js).
+//  - 원래 자리를 잃고 바로가기 폴더에만 남은 봇: 지난 자리로(폴더가 지워졌으면 다시 만든다), 모르면 폴더 밖 끝으로.
+//    PocketRisu 캐릭터 관리자는 끌어 놓을 때 겹친 ID를 앞의 것만 남겨 바로가기 폴더에 든 봇을 모두 원래 폴더에서 뺀다.
 //  - 바로가기 폴더에서 끌려 나와 두 번 있게 된 봇: 지난 순서에서 한 번이었으면 지난 자리 하나만 남긴다.
-// 지난 순서를 모르면 겹침은 건드리지 않는다(정리 점검이 알려 준다).
+//    지난 순서를 모르면 폴더 안 사본이 딱 하나이고 나머지가 폴더 밖일 때만 폴더 안 것을 남긴다. 그 밖의 겹침은 정리 점검이 알려 준다.
+// 지금 한 곳에만 있는 봇은 지난 순서와 달라도 그대로 둔다(사용자가 옮긴 것).
 function shortcutBase(raw, last) {
   const order = cloneOrder(raw);
   const scIds = order.filter(isShortcut).flatMap((f) => f.data);
   let base = order.filter((x) => !isShortcut(x));
-  if (last) {
-    const lastIds = orderBotIds(last);
-    const counts = new Map();
-    for (const id of orderBotIds(base)) counts.set(id, (counts.get(id) || 0) + 1);
-    for (const [id, n] of counts) {
-      if (n < 2 || lastIds.filter((x) => x === id).length !== 1) continue;
-      const want = botContainer(last, id);
-      const spots = [];
-      for (const item of base) {
-        if (item === id) spots.push(null);
-        else if (isFolder(item)) for (const x of item.data) if (x === id) spots.push(item.id);
-      }
-      const keep = Math.max(0, spots.indexOf(want));
-      base = dropBotAt(base, id, keep);
+  const lastIds = last ? orderBotIds(last) : [];
+  const counts = new Map();
+  for (const id of orderBotIds(base)) counts.set(id, (counts.get(id) || 0) + 1);
+  for (const [id, n] of counts) {
+    if (n < 2) continue;
+    const spots = [];
+    for (const item of base) {
+      if (item === id) spots.push(null);
+      else if (isFolder(item)) for (const x of item.data) if (x === id) spots.push(item.id);
     }
+    let keep = -1;
+    if (last && lastIds.filter((x) => x === id).length === 1) {
+      keep = Math.max(0, spots.indexOf(botContainer(last, id)));
+    } else if (!lastIds.includes(id)) {
+      const inFolder = spots.filter((s) => s !== null);
+      if (inFolder.length === 1) keep = spots.indexOf(inFolder[0]);
+    }
+    if (keep >= 0) base = dropBotAt(base, id, keep);
   }
   if (scIds.length) {
     const present = new Set(orderBotIds(base));
@@ -71,14 +99,15 @@ function shortcutBase(raw, last) {
       if (present.has(id)) continue;
       present.add(id);
       const fid = last ? botContainer(last, id) : undefined;
-      const folder = fid ? base.find((x) => isFolder(x) && x.id === fid) : null;
+      let folder = fid ? base.find((x) => isFolder(x) && x.id === fid) : null;
+      if (fid && !folder) folder = reviveFolder(base, last, fid);
       if (folder) {
         const at = Math.min(last.find((x) => isFolder(x) && x.id === fid).data.indexOf(id), folder.data.length);
         const data = [...folder.data];
         data.splice(at, 0, id);
         base = base.map((x) => (x === folder ? { ...folder, data } : x));
       } else {
-        base.push(id);
+        base.splice(fid === null ? afterNeighbor(base, last, last.indexOf(id)) : base.length, 0, id);
       }
     }
   }

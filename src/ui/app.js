@@ -1404,6 +1404,17 @@ function bindEvents(root) {
 
 let fmOpen = false;
 
+// 플러그인 창(iframe)은 문서 뿌리의 color-scheme 이 리스 화면 뿌리와 정확히 같아야 배경이 투명하게 그려진다.
+// 다르면 브라우저가 불투명한 바탕(흰색/검은색)을 칠한다. 순정 리스는 뿌리에 color-scheme 을 두지 않고(=light 와 같음),
+// 해적판은 리스 테마 종류(dark/light)를 둔다. 해적판은 backgroundModels API 가 객체로 있어 구분된다.
+async function matchHostColorScheme() {
+  let type = 'dark';
+  try { const c = await Risuai.getColorScheme(); type = (c?.scheme?.type || c?.type) === 'light' ? 'light' : 'dark'; } catch {}
+  let fork = false;
+  try { fork = typeof Risuai.backgroundModels === 'object' && Risuai.backgroundModels !== null; } catch {}
+  document.documentElement.style.colorScheme = type === 'light' ? 'light' : fork ? 'dark' : 'normal';
+}
+
 async function openManager() {
   if (fmOpen) return;
   fmOpen = true;
@@ -1429,6 +1440,7 @@ async function openManager() {
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
+    await matchHostColorScheme();
     document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}${PLUS_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);

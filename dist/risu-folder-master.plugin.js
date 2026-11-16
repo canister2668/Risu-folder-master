@@ -1,10 +1,10 @@
 //@name risu_folder_master
-//@display-name 📁 Risu 폴더 마스터 v1.1.0
+//@display-name 📁 Risu 폴더 마스터 v1.1.1
 //@api 3.0
-//@version 1.1.0
+//@version 1.1.1
 //@update-url https://raw.githubusercontent.com/canister2668/Risu-folder-master/main/dist/risu-folder-master.plugin.js
 
-// Risu 폴더 마스터 v1.1.0 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
+// Risu 폴더 마스터 v1.1.1 — RisuAI 봇 폴더 관리 + 사이드바 여러 열 배열
 // 소스: https://github.com/canister2668/Risu-folder-master (이 파일은 scripts/build.mjs 가 만든다. 직접 고치지 말 것)
 //
 // Copyright (C) 2026 Canister
@@ -14,7 +14,7 @@
 // RisuAI 공식 플러그인이 아니며, RisuAI 개발자와 관계없습니다.
 (() => {
 'use strict';
-const FM_VERSION = "1.1.0";
+const FM_VERSION = "1.1.1";
 
 // ── src/core/util.js ──
 // 공용 도우미.
@@ -367,29 +367,57 @@ function dropBotAt(order, id, keepIndex) {
   return out;
 }
 
-// 저장된 순서 → 바로가기 폴더를 뺀 순서. 사이드바 손질로 생긴 흔적을 지난 순서(last, base 모양)를 보고 고친다.
-//  - 바로가기 폴더로 끌려 들어가 원래 자리를 잃은 봇: 지난 자리로, 모르면 폴더 밖 끝으로.
+// last 의 at 번째 항목을 base 에 다시 넣을 자리: last 에서 그 앞에 있던 항목 중 base 에도 있는 가장 가까운 것 바로 뒤(없으면 맨 앞).
+function afterNeighbor(base, last, at) {
+  const key = (x) => (isFolder(x) ? 'f:' + x.id : 's:' + x);
+  const have = new Map(base.map((x, i) => [key(x), i]));
+  for (let i = at - 1; i >= 0; i--) {
+    const k = key(last[i]);
+    if (have.has(k)) return have.get(k) + 1;
+  }
+  return 0;
+}
+
+// 지난 순서(last)에 있던 폴더가 base 에서 사라졌으면 그 자리 근처에 빈 폴더로 다시 만든다.
+// (순정·해적 RisuAI는 빈 폴더를 지운다: 폴더의 마지막 봇을 바로가기 폴더로 끌면 폴더가 없어진다.)
+function reviveFolder(base, last, fid) {
+  const at = last.findIndex((x) => isFolder(x) && x.id === fid);
+  if (at < 0) return null;
+  const folder = { ...last[at], data: [] };
+  if ('img' in folder && typeof folder.img !== 'string') delete folder.img;
+  base.splice(afterNeighbor(base, last, at), 0, folder);
+  return folder;
+}
+
+// 저장된 순서 → 바로가기 폴더를 뺀 순서. 사이드바·다른 앱 손질로 생긴 흔적을 지난 순서(last, base 모양)를 보고 고친다.
+// last 는 기기 사이에 공유하는 기록(risuFolderMaster.home)에서 불러와 새로고침 뒤에도 남는다(store.js).
+//  - 원래 자리를 잃고 바로가기 폴더에만 남은 봇: 지난 자리로(폴더가 지워졌으면 다시 만든다), 모르면 폴더 밖 끝으로.
+//    PocketRisu 캐릭터 관리자는 끌어 놓을 때 겹친 ID를 앞의 것만 남겨 바로가기 폴더에 든 봇을 모두 원래 폴더에서 뺀다.
 //  - 바로가기 폴더에서 끌려 나와 두 번 있게 된 봇: 지난 순서에서 한 번이었으면 지난 자리 하나만 남긴다.
-// 지난 순서를 모르면 겹침은 건드리지 않는다(정리 점검이 알려 준다).
+//    지난 순서를 모르면 폴더 안 사본이 딱 하나이고 나머지가 폴더 밖일 때만 폴더 안 것을 남긴다. 그 밖의 겹침은 정리 점검이 알려 준다.
+// 지금 한 곳에만 있는 봇은 지난 순서와 달라도 그대로 둔다(사용자가 옮긴 것).
 function shortcutBase(raw, last) {
   const order = cloneOrder(raw);
   const scIds = order.filter(isShortcut).flatMap((f) => f.data);
   let base = order.filter((x) => !isShortcut(x));
-  if (last) {
-    const lastIds = orderBotIds(last);
-    const counts = new Map();
-    for (const id of orderBotIds(base)) counts.set(id, (counts.get(id) || 0) + 1);
-    for (const [id, n] of counts) {
-      if (n < 2 || lastIds.filter((x) => x === id).length !== 1) continue;
-      const want = botContainer(last, id);
-      const spots = [];
-      for (const item of base) {
-        if (item === id) spots.push(null);
-        else if (isFolder(item)) for (const x of item.data) if (x === id) spots.push(item.id);
-      }
-      const keep = Math.max(0, spots.indexOf(want));
-      base = dropBotAt(base, id, keep);
+  const lastIds = last ? orderBotIds(last) : [];
+  const counts = new Map();
+  for (const id of orderBotIds(base)) counts.set(id, (counts.get(id) || 0) + 1);
+  for (const [id, n] of counts) {
+    if (n < 2) continue;
+    const spots = [];
+    for (const item of base) {
+      if (item === id) spots.push(null);
+      else if (isFolder(item)) for (const x of item.data) if (x === id) spots.push(item.id);
     }
+    let keep = -1;
+    if (last && lastIds.filter((x) => x === id).length === 1) {
+      keep = Math.max(0, spots.indexOf(botContainer(last, id)));
+    } else if (!lastIds.includes(id)) {
+      const inFolder = spots.filter((s) => s !== null);
+      if (inFolder.length === 1) keep = spots.indexOf(inFolder[0]);
+    }
+    if (keep >= 0) base = dropBotAt(base, id, keep);
   }
   if (scIds.length) {
     const present = new Set(orderBotIds(base));
@@ -397,14 +425,15 @@ function shortcutBase(raw, last) {
       if (present.has(id)) continue;
       present.add(id);
       const fid = last ? botContainer(last, id) : undefined;
-      const folder = fid ? base.find((x) => isFolder(x) && x.id === fid) : null;
+      let folder = fid ? base.find((x) => isFolder(x) && x.id === fid) : null;
+      if (fid && !folder) folder = reviveFolder(base, last, fid);
       if (folder) {
         const at = Math.min(last.find((x) => isFolder(x) && x.id === fid).data.indexOf(id), folder.data.length);
         const data = [...folder.data];
         data.splice(at, 0, id);
         base = base.map((x) => (x === folder ? { ...folder, data } : x));
       } else {
-        base.push(id);
+        base.splice(fid === null ? afterNeighbor(base, last, last.indexOf(id)) : base.length, 0, id);
       }
     }
   }
@@ -856,6 +885,58 @@ const HISTORY_LIMIT = 20;
 // 즐겨찾기 바로가기 폴더(core/shortcut.js) 상태. last = 마지막으로 확인한 base(사이드바 손질 복구 기준).
 const shortcutState = { last: null, dbOk: false };
 
+// last 는 서버 플러그인 저장소에도 남긴다(risuFolderMaster.home). 메모리에만 두면 새로고침 직후 복구 기준이 없어,
+// 그사이 원래 자리를 잃은 봇(PocketRisu 캐릭터 관리자 끌기 등)이 폴더 밖으로 나갔다.
+// 기록은 봇이 빠졌거나 두 번 있을 때만 쓰인다(shortcutBase). 한 곳에만 있는 봇은 기록과 달라도 지금 자리가 맞다.
+const HOME_KEY = 'risuFolderMaster.home';
+const HOME_SAVE_MS = 1500;
+const homeState = { loading: null, saved: '', timer: null };
+
+function homeLoad() {
+  if (!homeState.loading) {
+    homeState.loading = (async () => {
+      try {
+        const v = await Risuai.pluginStorage.getItem(HOME_KEY);
+        if (v && typeof v === 'object' && Array.isArray(v.order)) {
+          const order = cloneOrder(v.order);
+          homeState.saved = JSON.stringify(order);
+          if (!shortcutState.last) shortcutState.last = order;
+        }
+      } catch {}
+    })();
+  }
+  return homeState.loading;
+}
+
+// 폴더 그림 칸(img)은 RisuAI가 채운 긴 값일 수 있어 짧을 때만 남긴다(다시 만들 때는 imgFile 이 기준).
+function homeTrim(order) {
+  return cloneOrder(order).map((x) => {
+    if (!isFolder(x) || typeof x.img !== 'string' || x.img.length <= 2048) return x;
+    const { img, ...rest } = x;
+    return rest;
+  });
+}
+
+function homeSave() {
+  clearTimeout(homeState.timer);
+  homeState.timer = setTimeout(async () => {
+    homeState.timer = null;
+    if (!shortcutState.last) return;
+    const order = homeTrim(shortcutState.last);
+    const text = JSON.stringify(order);
+    if (text === homeState.saved) return;
+    try {
+      await Risuai.pluginStorage.setItem(HOME_KEY, { at: Date.now(), order });
+      homeState.saved = text;
+    } catch {}
+  }, HOME_SAVE_MS);
+}
+
+function setLast(base) {
+  shortcutState.last = cloneOrder(base);
+  homeSave();
+}
+
 function currentShortcutOpts() {
   return typeof shortcutOpts === 'function' ? shortcutOpts() : null;
 }
@@ -875,6 +956,7 @@ async function readRawOrder() {
 
 // 폴더 마스터가 다루는 순서: 바로가기 폴더를 빼고 사이드바 손질 흔적을 고친 것.
 async function readOrder() {
+  await homeLoad();
   return shortcutBase(await readRawOrder(), shortcutState.last);
 }
 
@@ -931,13 +1013,14 @@ const saver = {
   // v3 에는 원자적 비교-쓰기가 없다(읽기와 setDatabaseLite 가 따로 오간다). 완전히 막을 수는 없으므로 창을 좁힌다:
   // 쓰기 직전에 다시 읽어 그 사이 바뀌었으면 최신 값에 같은 작업을 다시 적용하고, 쓴 뒤에는 다시 읽어 결과를 확인한다.
   async writeChecked(before, next) {
+    await homeLoad();
     const raw = await readRawOrder();
     const latest = shortcutBase(raw, shortcutState.last);
     if (JSON.stringify(latest) !== JSON.stringify(before)) return 'changed';
     await Risuai.setDatabaseLite({ characterOrder: rawFor(next, raw) });
     const after = await readOrder();
     const ok = JSON.stringify(after) === JSON.stringify(cloneOrder(next));
-    if (ok) shortcutState.last = cloneOrder(next);
+    if (ok) setLast(next);
     return ok ? 'ok' : 'drift';
   },
 
@@ -945,13 +1028,14 @@ const saver = {
   // 반환: 'written' | 'same'
   syncShortcut() {
     const job = this.queue.then(async () => {
+      await homeLoad();
       const raw = await readRawOrder();
       const base = shortcutBase(raw, shortcutState.last);
       const next = rawFor(base, raw);
-      shortcutState.last = base;
-      if (JSON.stringify(next) === JSON.stringify(raw)) return 'same';
+      if (JSON.stringify(next) === JSON.stringify(raw)) { setLast(base); return 'same'; }
       validateOrder(next);
       await Risuai.setDatabaseLite({ characterOrder: next });
+      setLast(base);
       return 'written';
     });
     this.queue = job.catch(() => {});
@@ -1804,8 +1888,10 @@ const APP_CSS = `
   --bg:#0f1218;--panel:#141820;--surface:#191e28;--surface-2:#1f2532;--line:#272e3c;--line-2:#323a4b;
   --text:#e7eaf1;--muted:#8d95a8;--faint:#5f6779;--accent:#6c7cff;--accent-2:#8f9bff;--accent-bg:#232a4a;
   --danger:#ef5a6a;--ok:#3ccf91;--radius:12px;
-  color-scheme:dark;
 }
+/* 뿌리(html)의 color-scheme 은 리스 화면과 맞춰야 플러그인 창 배경이 투명하다(app.js matchHostColorScheme).
+   테마의 밝음·어두움은 body 에 둔다. */
+body{color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:transparent;overflow:hidden}
 body{font:13px/1.45 Pretendard,"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
@@ -2808,7 +2894,13 @@ async function shortcutStartup() {
   await favLoad();
   await shortcutReloadStores();
   await cleanupResume();
-  if (shortcutAnyOn()) await shortcutGuard();
+  await homeLoad();
+  if (shortcutAnyOn()) {
+    // 켜질 때 한 번 맞춘다. 꺼져 있던 동안 원래 자리를 잃은 봇을 저장된 기록(home)으로 되돌리고, 감시도 바로 시작한다.
+    try { await saver.syncShortcut(); } catch {}
+    await shortcutGuard();
+    shortcutPollStart();
+  }
   recentWatchStart();
 }
 
@@ -3320,7 +3412,7 @@ function plusSidebarSettingsHtml(d) {
   return `<span class="fm-label">사이드바 바로가기 폴더</span>
      <p class="fm-note">RisuAI 사이드바 맨 위에 봇의 바로가기 폴더를 둡니다. 봇은 복사되지 않고 원래 폴더에도 그대로 있습니다. 이 폴더들은 폴더 마스터에서만 고칩니다.</p>
      <div class="fm-set-row"><div><b>즐겨찾기 폴더</b><small>즐겨찾는 봇을 사이드바 맨 위에</small></div>${favSwitchHtml(d.fav, 'data-sw="fav"', '사이드바 즐겨찾기 폴더 켜기/끄기')}</div>
-     <div class="fm-set-row">${shortcutIconButton('recent')}<div><b>최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다). 왼쪽 그림을 누르면 아이콘을 바꿉니다.</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
+     <div class="fm-set-row">${shortcutIconButton('recent')}<div><b>최근 대화 폴더</b><small>최근에 연 봇 순서대로 자동으로 채웁니다. 리스를 열 때나 봇을 바꿀 때 RisuAI가 데이터 권한을 다시 물을 수 있습니다(3일마다). 왼쪽 그림을 누르면 아이콘을 바꿉니다.</small></div>${favSwitchHtml(d.recent, 'data-sw="recent"', '최근 대화 폴더 켜기/끄기')}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>보여 줄 개수</b></div>${seg('data-rcount', [[5, '5'], [8, '8'], [12, '12']], d.count)}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>즐겨찾기 봇은 빼기</b><small>두 폴더에 같은 봇이 겹치지 않게</small></div>${favSwitchHtml(d.noStars, 'data-sw="noStars"', '최근 대화에서 즐겨찾기 봇 빼기')}</div>
      <div class="fm-set-row fm-sub-row" data-recent-only><div><b>폴더 순서</b></div>${seg('data-rfirst', [['recent', '최근 먼저'], ['favorites', '즐겨찾기 먼저']], d.first)}</div>
@@ -6036,6 +6128,17 @@ function bindEvents(root) {
 
 let fmOpen = false;
 
+// 플러그인 창(iframe)은 문서 뿌리의 color-scheme 이 리스 화면 뿌리와 정확히 같아야 배경이 투명하게 그려진다.
+// 다르면 브라우저가 불투명한 바탕(흰색/검은색)을 칠한다. 순정 리스는 뿌리에 color-scheme 을 두지 않고(=light 와 같음),
+// 해적판은 리스 테마 종류(dark/light)를 둔다. 해적판은 backgroundModels API 가 객체로 있어 구분된다.
+async function matchHostColorScheme() {
+  let type = 'dark';
+  try { const c = await Risuai.getColorScheme(); type = (c?.scheme?.type || c?.type) === 'light' ? 'light' : 'dark'; } catch {}
+  let fork = false;
+  try { fork = typeof Risuai.backgroundModels === 'object' && Risuai.backgroundModels !== null; } catch {}
+  document.documentElement.style.colorScheme = type === 'light' ? 'light' : fork ? 'dark' : 'normal';
+}
+
 async function openManager() {
   if (fmOpen) return;
   fmOpen = true;
@@ -6061,6 +6164,7 @@ async function openManager() {
     ui.pending = null;
     ui.reorder = null;
     ui.query = '';
+    await matchHostColorScheme();
     document.body.innerHTML = `<style>${APP_CSS}${FEATURE_CSS}${FAV_CSS}${PLUS_CSS}</style>${shellHtml()}`;
     ui.app = document.querySelector('.fm-app');
     saver.onBusy = (busy) => ui.app?.classList.toggle('is-busy', busy);
@@ -6357,9 +6461,9 @@ const PLUS_KEY='risuFolderMaster.extras';
 const plus={theme:'classic'};
 const PLUS_THEMES={classic:{label:'기존 다크',swatch:'#6c7cff',bg:'#0f1218'},mint:{label:'민트 라이트',swatch:'#006c60',bg:'#f6f7f4'},blue:{label:'블루 라이트',swatch:'#235da2',bg:'#f3f6fa'},ocean:{label:'오션 다크',swatch:'#80e3c5',bg:'#111e24'}};
 const FEATURE_CSS=`
-:root[data-fm-theme=mint]{color-scheme:light;--bg:#f6f7f4;--panel:#eff2ef;--surface:#fff;--surface-2:#e7eeea;--line:#cfdad4;--line-2:#9bafa5;--text:#152f33;--muted:#596b6c;--faint:#62736d;--accent:#006c60;--accent-2:#00584e;--accent-bg:#dcefe8;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
-:root[data-fm-theme=blue]{color-scheme:light;--bg:#f3f6fa;--panel:#eaf0f7;--surface:#fff;--surface-2:#e1eaf4;--line:#ccd8e5;--line-2:#92abc5;--text:#192e47;--muted:#51657c;--faint:#5b6e82;--accent:#235da2;--accent-2:#184c8b;--accent-bg:#dfebfd;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
-:root[data-fm-theme=ocean]{color-scheme:dark;--bg:#111e24;--panel:#13232a;--surface:#182a31;--surface-2:#243c43;--line:#354c53;--line-2:#607d85;--text:#f0f6f5;--muted:#b1c3c6;--faint:#9bb4b9;--accent:#80e3c5;--accent-2:#a7efda;--accent-bg:#204b40;--danger:#ff8e9a;--ok:#80e3c5;--button-text:#102a24}
+:root[data-fm-theme=mint] body{color-scheme:light}\n:root[data-fm-theme=mint]{--bg:#f6f7f4;--panel:#eff2ef;--surface:#fff;--surface-2:#e7eeea;--line:#cfdad4;--line-2:#9bafa5;--text:#152f33;--muted:#596b6c;--faint:#62736d;--accent:#006c60;--accent-2:#00584e;--accent-bg:#dcefe8;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
+:root[data-fm-theme=blue] body{color-scheme:light}\n:root[data-fm-theme=blue]{--bg:#f3f6fa;--panel:#eaf0f7;--surface:#fff;--surface-2:#e1eaf4;--line:#ccd8e5;--line-2:#92abc5;--text:#192e47;--muted:#51657c;--faint:#5b6e82;--accent:#235da2;--accent-2:#184c8b;--accent-bg:#dfebfd;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
+:root[data-fm-theme=ocean] body{color-scheme:dark}\n:root[data-fm-theme=ocean]{--bg:#111e24;--panel:#13232a;--surface:#182a31;--surface-2:#243c43;--line:#354c53;--line-2:#607d85;--text:#f0f6f5;--muted:#b1c3c6;--faint:#9bb4b9;--accent:#80e3c5;--accent-2:#a7efda;--accent-bg:#204b40;--danger:#ff8e9a;--ok:#80e3c5;--button-text:#102a24}
 :root[data-fm-theme=classic]{--button-text:#fff}
 :root:not([data-fm-theme=classic]) .fm-nav{color:var(--text)}
 :root:not([data-fm-theme=classic]) .fm-nav.on,:root:not([data-fm-theme=classic]) .fm-banner b{color:var(--text)}

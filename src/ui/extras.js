@@ -3,9 +3,9 @@ const PLUS_KEY='risuFolderMaster.extras';
 const plus={theme:'classic'};
 const PLUS_THEMES={classic:{label:'기존 다크',swatch:'#6c7cff',bg:'#0f1218'},mint:{label:'민트 라이트',swatch:'#006c60',bg:'#f6f7f4'},blue:{label:'블루 라이트',swatch:'#235da2',bg:'#f3f6fa'},ocean:{label:'오션 다크',swatch:'#80e3c5',bg:'#111e24'}};
 const FEATURE_CSS=`
-:root[data-fm-theme=mint]{color-scheme:light;--bg:#f6f7f4;--panel:#eff2ef;--surface:#fff;--surface-2:#e7eeea;--line:#cfdad4;--line-2:#9bafa5;--text:#152f33;--muted:#596b6c;--faint:#62736d;--accent:#006c60;--accent-2:#00584e;--accent-bg:#dcefe8;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
-:root[data-fm-theme=blue]{color-scheme:light;--bg:#f3f6fa;--panel:#eaf0f7;--surface:#fff;--surface-2:#e1eaf4;--line:#ccd8e5;--line-2:#92abc5;--text:#192e47;--muted:#51657c;--faint:#5b6e82;--accent:#235da2;--accent-2:#184c8b;--accent-bg:#dfebfd;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
-:root[data-fm-theme=ocean]{color-scheme:dark;--bg:#111e24;--panel:#13232a;--surface:#182a31;--surface-2:#243c43;--line:#354c53;--line-2:#607d85;--text:#f0f6f5;--muted:#b1c3c6;--faint:#9bb4b9;--accent:#80e3c5;--accent-2:#a7efda;--accent-bg:#204b40;--danger:#ff8e9a;--ok:#80e3c5;--button-text:#102a24}
+:root[data-fm-theme=mint] body{color-scheme:light}\n:root[data-fm-theme=mint]{--bg:#f6f7f4;--panel:#eff2ef;--surface:#fff;--surface-2:#e7eeea;--line:#cfdad4;--line-2:#9bafa5;--text:#152f33;--muted:#596b6c;--faint:#62736d;--accent:#006c60;--accent-2:#00584e;--accent-bg:#dcefe8;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
+:root[data-fm-theme=blue] body{color-scheme:light}\n:root[data-fm-theme=blue]{--bg:#f3f6fa;--panel:#eaf0f7;--surface:#fff;--surface-2:#e1eaf4;--line:#ccd8e5;--line-2:#92abc5;--text:#192e47;--muted:#51657c;--faint:#5b6e82;--accent:#235da2;--accent-2:#184c8b;--accent-bg:#dfebfd;--danger:#b52f42;--ok:#006c60;--button-text:#fff}
+:root[data-fm-theme=ocean] body{color-scheme:dark}\n:root[data-fm-theme=ocean]{--bg:#111e24;--panel:#13232a;--surface:#182a31;--surface-2:#243c43;--line:#354c53;--line-2:#607d85;--text:#f0f6f5;--muted:#b1c3c6;--faint:#9bb4b9;--accent:#80e3c5;--accent-2:#a7efda;--accent-bg:#204b40;--danger:#ff8e9a;--ok:#80e3c5;--button-text:#102a24}
 :root[data-fm-theme=classic]{--button-text:#fff}
 :root:not([data-fm-theme=classic]) .fm-nav{color:var(--text)}
 :root:not([data-fm-theme=classic]) .fm-nav.on,:root:not([data-fm-theme=classic]) .fm-banner b{color:var(--text)}

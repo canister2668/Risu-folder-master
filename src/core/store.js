@@ -5,6 +5,58 @@ const HISTORY_LIMIT = 20;
 // 즐겨찾기 바로가기 폴더(core/shortcut.js) 상태. last = 마지막으로 확인한 base(사이드바 손질 복구 기준).
 const shortcutState = { last: null, dbOk: false };
 
+// last 는 서버 플러그인 저장소에도 남긴다(risuFolderMaster.home). 메모리에만 두면 새로고침 직후 복구 기준이 없어,
+// 그사이 원래 자리를 잃은 봇(PocketRisu 캐릭터 관리자 끌기 등)이 폴더 밖으로 나갔다.
+// 기록은 봇이 빠졌거나 두 번 있을 때만 쓰인다(shortcutBase). 한 곳에만 있는 봇은 기록과 달라도 지금 자리가 맞다.
+const HOME_KEY = 'risuFolderMaster.home';
+const HOME_SAVE_MS = 1500;
+const homeState = { loading: null, saved: '', timer: null };
+
+function homeLoad() {
+  if (!homeState.loading) {
+    homeState.loading = (async () => {
+      try {
+        const v = await Risuai.pluginStorage.getItem(HOME_KEY);
+        if (v && typeof v === 'object' && Array.isArray(v.order)) {
+          const order = cloneOrder(v.order);
+          homeState.saved = JSON.stringify(order);
+          if (!shortcutState.last) shortcutState.last = order;
+        }
+      } catch {}
+    })();
+  }
+  return homeState.loading;
+}
+
+// 폴더 그림 칸(img)은 RisuAI가 채운 긴 값일 수 있어 짧을 때만 남긴다(다시 만들 때는 imgFile 이 기준).
+function homeTrim(order) {
+  return cloneOrder(order).map((x) => {
+    if (!isFolder(x) || typeof x.img !== 'string' || x.img.length <= 2048) return x;
+    const { img, ...rest } = x;
+    return rest;
+  });
+}
+
+function homeSave() {
+  clearTimeout(homeState.timer);
+  homeState.timer = setTimeout(async () => {
+    homeState.timer = null;
+    if (!shortcutState.last) return;
+    const order = homeTrim(shortcutState.last);
+    const text = JSON.stringify(order);
+    if (text === homeState.saved) return;
+    try {
+      await Risuai.pluginStorage.setItem(HOME_KEY, { at: Date.now(), order });
+      homeState.saved = text;
+    } catch {}
+  }, HOME_SAVE_MS);
+}
+
+function setLast(base) {
+  shortcutState.last = cloneOrder(base);
+  homeSave();
+}
+
 function currentShortcutOpts() {
   return typeof shortcutOpts === 'function' ? shortcutOpts() : null;
 }
@@ -24,6 +76,7 @@ async function readRawOrder() {
 
 // 폴더 마스터가 다루는 순서: 바로가기 폴더를 빼고 사이드바 손질 흔적을 고친 것.
 async function readOrder() {
+  await homeLoad();
   return shortcutBase(await readRawOrder(), shortcutState.last);
 }
 
@@ -80,13 +133,14 @@ const saver = {
   // v3 에는 원자적 비교-쓰기가 없다(읽기와 setDatabaseLite 가 따로 오간다). 완전히 막을 수는 없으므로 창을 좁힌다:
   // 쓰기 직전에 다시 읽어 그 사이 바뀌었으면 최신 값에 같은 작업을 다시 적용하고, 쓴 뒤에는 다시 읽어 결과를 확인한다.
   async writeChecked(before, next) {
+    await homeLoad();
     const raw = await readRawOrder();
     const latest = shortcutBase(raw, shortcutState.last);
     if (JSON.stringify(latest) !== JSON.stringify(before)) return 'changed';
     await Risuai.setDatabaseLite({ characterOrder: rawFor(next, raw) });
     const after = await readOrder();
     const ok = JSON.stringify(after) === JSON.stringify(cloneOrder(next));
-    if (ok) shortcutState.last = cloneOrder(next);
+    if (ok) setLast(next);
     return ok ? 'ok' : 'drift';
   },
 
@@ -94,13 +148,14 @@ const saver = {
   // 반환: 'written' | 'same'
   syncShortcut() {
     const job = this.queue.then(async () => {
+      await homeLoad();
       const raw = await readRawOrder();
       const base = shortcutBase(raw, shortcutState.last);
       const next = rawFor(base, raw);
-      shortcutState.last = base;
-      if (JSON.stringify(next) === JSON.stringify(raw)) return 'same';
+      if (JSON.stringify(next) === JSON.stringify(raw)) { setLast(base); return 'same'; }
       validateOrder(next);
       await Risuai.setDatabaseLite({ characterOrder: next });
+      setLast(base);
       return 'written';
     });
     this.queue = job.catch(() => {});

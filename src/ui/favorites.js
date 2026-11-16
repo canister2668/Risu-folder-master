@@ -157,7 +157,13 @@ async function shortcutStartup() {
   await favLoad();
   await shortcutReloadStores();
   await cleanupResume();
-  if (shortcutAnyOn()) await shortcutGuard();
+  await homeLoad();
+  if (shortcutAnyOn()) {
+    // 켜질 때 한 번 맞춘다. 꺼져 있던 동안 원래 자리를 잃은 봇을 저장된 기록(home)으로 되돌리고, 감시도 바로 시작한다.
+    try { await saver.syncShortcut(); } catch {}
+    await shortcutGuard();
+    shortcutPollStart();
+  }
   recentWatchStart();
 }
 

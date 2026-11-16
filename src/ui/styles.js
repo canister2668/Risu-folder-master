@@ -21,8 +21,10 @@ const APP_CSS = `
   --bg:#0f1218;--panel:#141820;--surface:#191e28;--surface-2:#1f2532;--line:#272e3c;--line-2:#323a4b;
   --text:#e7eaf1;--muted:#8d95a8;--faint:#5f6779;--accent:#6c7cff;--accent-2:#8f9bff;--accent-bg:#232a4a;
   --danger:#ef5a6a;--ok:#3ccf91;--radius:12px;
-  color-scheme:dark;
 }
+/* 뿌리(html)의 color-scheme 은 리스 화면과 맞춰야 플러그인 창 배경이 투명하다(app.js matchHostColorScheme).
+   테마의 밝음·어두움은 body 에 둔다. */
+body{color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:transparent;overflow:hidden}
 body{font:13px/1.45 Pretendard,"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
